@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据分析技术学习平台 - 夏荷</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        /* 导航栏 */
+        .navbar {
+            background: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .user-info {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* 主要容器 */
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        /* 模块卡片 */
+        .module-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .module-card {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .module-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+
+        .module-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+        }
+
+        .module-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+        }
+
+        .module-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .module-desc {
+            color: #666;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        /* 页面容器 */
+        .page {
+            display: none;
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            min-height: 600px;
+        }
+
+        .page.active {
+            display: block;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 页面标题 */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .page-title {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .back-btn {
+            background: #f5f5f5;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .back-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        /* 知识点学习 */
+        .knowledge-section {
+            margin-bottom: 2rem;
+        }
+
+        .knowledge-item {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-radius: 0 10px 10px 0;
+            transition: all 0.3s ease;
+        }
+
+        .knowledge-item:hover {
+            background: #e9ecef;
+            transform: translateX(10px);
+        }
+
+        .knowledge-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .knowledge-content {
+            color: #666;
+            line-height: 1.8;
+        }
+
+        .knowledge-tag {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+
+        /* 练习题 */
+        .exercise-item {
+            background: #f8f9fa;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            border-radius: 15px;
+            position: relative;
+        }
+
+        .exercise-number {
+            position: absolute;
+            top: -10px;
+            left: 20px;
+            background: #667eea;
+            color: white;
+            padding: 0.3rem 1rem;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .exercise-question {
+            font-size: 1.1rem;
+            color: #333;
+            margin-bottom: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .exercise-options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+
+        .option-btn {
+            background: white;
+            border: 2px solid #e0e0e0;
+            padding: 1rem;
+            border-radius: 10px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+
+        .option-btn:hover {
+            border-color: #667eea;
+            background: #f0f0ff;
+        }
+
+        .option-btn.selected {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .option-btn.correct {
+            border-color: #28a745;
+            background: #28a745;
+            color: white;
+        }
+
+        .option-btn.wrong {
+            border-color: #dc3545;
+            background: #dc3545;
+            color: white;
+        }
+
+        .submit-exercise-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            margin-top: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .submit-exercise-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        /* 考试模块 */
+        .exam-header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .exam-timer {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .exam-progress {
+            font-size: 1.1rem;
+        }
+
+        .exam-question {
+            font-size: 1.3rem;
+            color: #333;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .exam-nav {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 2rem;
+        }
+
+        .nav-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .nav-btn:hover {
+            background: #5568d3;
+        }
+
+        .nav-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* 成绩页面 */
+        .score-display {
+            text-align: center;
+            padding: 3rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 20px;
+            color: white;
+            margin-bottom: 2rem;
+        }
+
+        .score-number {
+            font-size: 5rem;
+            font-weight: bold;
+            margin: 1rem 0;
+        }
+
+        .score-label {
+            font-size: 1.5rem;
+        }
+
+        .wrong-questions {
+            margin-top: 2rem;
+        }
+
+        .wrong-item {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-radius: 0 10px 10px 0;
+        }
+
+        .wrong-question {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .wrong-answer {
+            color: #dc3545;
+            margin: 0.3rem 0;
+        }
+
+        .correct-answer {
+            color: #28a745;
+            margin: 0.3rem 0;
+        }
+
+        .analysis {
+            background: #e7f3ff;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-top: 0.5rem;
+            color: #0056b3;
+        }
+
+        /* 开始按钮 */
+        .start-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 1.5rem 3rem;
+            border-radius: 15px;
+            font-size: 1.3rem;
+            cursor: pointer;
+            margin: 2rem auto;
+            display: block;
+            transition: all 0.3s ease;
+        }
+
+        .start-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 1rem;
+            }
+            
+            .module-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .page-header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .exam-header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+        }
+
+        /* 加载动画 */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 3rem;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 完成标记 */
+        .completed-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: #28a745;
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+
+        /* 进度条 */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            margin-top: 1rem;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="nav-content">
+            <div class="logo">📊 数据分析技术学习平台</div>
+            <div class="user-info">👤 夏荷 | 广东科学技术职业学院</div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- 主界面 - 模块选择 -->
+        <div id="mainPage" class="active">
+            <div class="page-header" style="border: none; margin-bottom: 2rem;">
+                <div>
+                    <h1 class="page-title">数据分析技术学习中心</h1>
+                    <p style="color: #666; margin-top: 0.5rem;">选择一个模块开始学习</p>
+                </div>
+            </div>
+
+            <div class="module-grid">
+                <div class="module-card" onclick="showPage('knowledge')">
+                    <div class="module-icon">📚</div>
+                    <div class="module-title">知识点学习</div>
+                    <div class="module-desc">系统学习数据分析技术的基础知识，包括数据清洗、数据可视化、统计分析等核心概念。</div>
+                </div>
+
+                <div class="module-card" onclick="showPage('exercises')">
+                    <div class="module-icon">✍️</div>
+                    <div class="module-title">训练项目</div>
+                    <div class="module-desc">10个实战练习题，涵盖Python数据分析、数据处理、数据可视化等技能。</div>
+                </div>
+
+                <div class="module-card" onclick="showPage('exam')">
+                    <div class="module-icon">📝</div>
+                    <div class="module-title">在线考试</div>
+                    <div class="module-desc">限时考试模块，包含20道选择题，测试你对数据分析技术的掌握程度。</div>
+                </div>
+
+                <div class="module-card" onclick="showPage('results')">
+                    <div class="module-icon">📊</div>
+                    <div class="module-title">成绩查看</div>
+                    <div class="module-desc">查看历史考试成绩，分析错题，理解解题思路，提升学习效果。</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 知识点学习页面 -->
+        <div id="knowledgePage" class="page">
+            <div class="page-header">
+                <h2 class="page-title">📚 数据分析技术知识点学习</h2>
+                <button class="back-btn" onclick="showPage('main')">← 返回主页</button>
+            </div>
+
+            <div class="knowledge-section">
+                <h3 style="color: #667eea; margin-bottom: 1rem; font-size: 1.3rem;">一、数据分析概述</h3>
+                
+                <div class="knowledge-item">
+                    <div class="knowledge-title">1.1 数据分析的定义</div>
+                    <div class="knowledge-content">
+                        数据分析是用适当的统计分析方法对收集来的大量数据进行分析，将它们加以汇总和理解并消化，以求最大化地开发数据的功能，发挥数据的作用。数据分析是为了提取有用信息和形成结论而对数据加以详细研究和概括总结的过程。
+                    </div>
+                    <span class="knowledge-tag">基础概念</span>
+                </div>
+
+                <div class="knowledge-item">
+                    <div class="knowledge-title">1.2 数据分析的基本流程</div>
+                    <div class="knowledge-content">
+                        <strong>1. 明确分析目的：</strong>确定要解决什么问题<br>
+                        <strong>2. 数据收集：</strong>通过爬虫、API、数据库等方式获取数据<br>
+                        <strong>3. 数据清洗：</strong>处理缺失值、异常值、重复值<br>
+                        <strong>4. 数据分析：</strong>使用统计方法进行数据分析<br>
+                        <strong>5. 数据可视化：</strong>通过图表展示分析结果<br>
+                        <strong>6. 报告撰写：</strong>总结结论并提出建议
+                    </div>
+                    <span class="knowledge-tag">流程</span>
+                </div>
+
+                <div class="knowledge-item">
+                    <div class="knowledge-title">1.3 数据分析的工具</div>
+                    <div class="knowledge-content">
+                        <strong>Python生态系统：</strong><br>
+                        • NumPy：数值计算基础库<br>
+                        • Pandas：数据处理和分析<br>
+                        • Matplotlib/Seaborn：数据可视化<br>
+                        • Scikit-learn：机器学习<br>
+                        <br>
+                        <strong>其他工具：</strong><br>
+                        • Excel：基础数据分析<br>
+                        • SQL：数据库查询<br>
+                        • Tableau：商业智能可视化
+                    </div>
+                    <span class="knowledge-tag">工具</span>
+                </div>
+            </div>
+
+            <div class="knowledge-section">
+                <h3 style="color: #667eea; margin-bottom: 1rem; font-size: 1.3rem;">二、数据清洗</h3>
+                
+                <div class="knowledge-item">
+                    <div class="knowledge-title">2.1 缺失值处理</div>
+                    <div class="knowledge-content">
+                        <strong>缺失值类型：</strong>完全随机缺失、随机缺失、非随机缺失<br><br>
+                        <strong>处理方法：</strong><br>
+                        • 删除法：删除缺失值所在的行或列<br>
+                        • 均值填充：用均值填充数值型缺失值<br>
+                        • 中位数填充：用中位数填充，避免异常值影响<br>
+                        • 众数填充：用于分类变量<br>
+                        • 插值法：使用前后值进行插值<br>
+                        • 模型预测：用其他特征预测缺失值
+                    </div>
+                    <span class="knowledge-tag">重要</span>
+                </div>
+
+                <div class="knowledge-item">
+                    <div class="knowledge-title">2.2 异常值检测</div>
+                    <div class="knowledge-content">
+                        <strong>异常值定义：</strong>偏离大部分数据分布的点<br><br>
+                        <strong>检测方法：</strong><br>
+                        • 3σ原则：数据落在(μ-3σ, μ+3σ)区间外的概率为0.27%<br>
+                        • IQR四分位距：小于Q1-1.5×IQR或大于Q3+1.5×IQR为异常<br>
+                        • 散点图：可视化观察离群点<br>
+                        • Z-score：标准化后绝对值大于3的为异常<br><br>
+                        <strong>处理方式：</strong>删除、替换为边界值、或保留并标记
+                    </div>
+                    <span class="knowledge-tag">重要</span>
+                </div>
+
+                <div class="knowledge-item">
+                    <div class="knowledge-title">2.3 数据类型转换</div>
+                    <div class="knowledge-content">
+                        <strong>常见数据类型：</strong><br>
+                        • 数值型：int, float<br>
+                        • 字符串型：str<br>
+                        • 日期时间型：datetime<br>
+                        • 类别型：category, object<br><br>
+                        <strong>转换方法：</strong><br>
+                        • pd.to_numeric()：转换为数值型<br>
+                        • pd.to_datetime()：转换为日期时间<br>
+                        • astype()：强制类型转换<br>
+                        • apply()：使用自定义函数转换
+                    </div>
+                    <span class="knowledge-tag">技巧</span>
+                </div>
+            </div>
+
+            <div class="knowledge-section">
+                <h3 style="color: #667eea; margin-bottom: 1rem; font-size: 1.3rem;">三、数据可视化</h3>
+                
+                <div class="knowledge-item">
+                    <div class="knowledge-title">3.1 常用图表类型</div>
+                    <div class="knowledge-content">
+                        <strong>比较类：</strong><br>
+                        • 柱状图：比较不同类别的数值大小<br>
+                        • 折线图：展示数据随时间变化的趋势<br>
+                        • 雷达图：多维度对比<br><br>
+                        <strong>构成类：</strong><br>
+                        • 饼图：展示各部分占比<br>
+                        • 堆叠柱状图：展示整体和部分关系<br><br>
+                        <strong>分布类：</strong><br>
+                        • 直方图：展示数据分布<br>
+                        • 箱线图：展示统计特征和异常值<br>
+                        • 散点图：展示两个变量关系
+                    </div>
+                    <span class="knowledge-tag">可视化</span>
+                </div>
+
+                <div class="knowledge-item">
+                    <div class="knowledge-title">3.2 Python可视化库</div>
+                    <div class="knowledge-content">
+                        <strong>Matplotlib：</strong>最基础的绑图库，灵活性高但语法较复杂<br><br>
+                        <strong>Seaborn：</strong>基于Matplotlib，语法简洁，默认样式美观<br><br>
+                        <strong>Plotly：</strong>支持交互式图表，适合Web展示<br><br>
+                        <strong>Pandas：</strong>集成了基础的plot方法，适合快速绑图
+                    </div>
+                    <span class="knowledge-tag">工具</span>
+                </div>
+            </div>
+
+            <div class="knowledge-section">
+                <h3 style="color: #667eea; margin-bottom: 1rem; font-size: 1.3rem;">四、统计分析基础</h3>
+                
+                <div class="knowledge-item">
+                    <div class="knowledge-title">4.1 描述性统计</div>
+                    <div class="knowledge-content">
+                        <strong>集中趋势：</strong><br>
+                        • 均值(Mean)：数据的算术平均值<br>
+                        • 中位数(Median)：排序后位于中间的值<br>
+                        • 众数(Mode)：出现次数最多的值<br><br>
+                        <strong>离散程度：</strong><br>
+                        • 方差(Variance)：数据偏离均值的程度<br>
+                        • 标准差(Std)：方差的平方根<br>
+                        • 极差(Range)：最大值与最小值之差<br>
+                        • 四分位距(IQR)：Q3与Q1之差
+                    </div>
+                    <span class="knowledge-tag">统计</span>
+                </div>
+
+                <div class="knowledge-item">
+                    <div class="knowledge-title">4.2 相关性分析</div>
+                    <div class="knowledge-content">
+                        <strong>Pearson相关系数：</strong>衡量两个连续变量之间的线性关系<br>
+                        范围：-1到1，接近1表示强正相关，接近-1表示强负相关<br><br>
+                        <strong>Spearman相关系数：</strong>衡量单调关系，不要求线性<br><br>
+                        <strong>相关系数解读：</strong><br>
+                        • |r| < 0.3：弱相关<br>
+                        • 0.3 ≤ |r| < 0.7：中等相关<br>
+                        • |r| ≥ 0.7：强相关
+                    </div>
+                    <span class="knowledge-tag">分析</span>
+                </div>
+            </div>
+
+            <button class="back-btn" style="width: 100%; justify-content: center; margin-top: 2rem;" onclick="showPage('main')">← 返回主页继续学习其他模块</button>
+        </div>
+
+        <!-- 练习题页面 -->
+        <div id="exercisesPage" class="page">
+            <div class="page-header">
+                <h2 class="page-title">✍️ 训练项目</h2>
+                <button class="back-btn" onclick="showPage('main')">← 返回主页</button>
+            </div>
+
+            <div id="exerciseContainer"></div>
+        </div>
+
+        <!-- 在线考试页面 -->
+        <div id="examPage" class="page">
+            <div class="page-header">
+                <h2 class="page-title">📝 在线考试</h2>
+                <button class="back-btn" onclick="showPage('main')">← 返回主页</button>
+            </div>
+
+            <div id="examContent"></div>
+        </div>
+
+        <!-- 成绩页面 -->
+        <div id="resultsPage" class="page">
+            <div class="page-header">
+                <h2 class="page-title">📊 成绩分析</h2>
+                <button class="back-btn" onclick="showPage('main')">← 返回主页</button>
+            </div>
+
+            <div id="resultsContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // 练习题数据
+        const exercises = [
+            {
+                id: 1,
+                question: "在Python中，哪个库主要用于数据处理和分析？",
+                options: ["NumPy", "Pandas", "Matplotlib", "Scikit-learn"],
+                answer: 1,
+                explanation: "Pandas是Python中最常用的数据处理和分析库，提供了DataFrame数据结构，方便进行数据清洗、转换、分析等操作。"
+            },
+            {
+                id: 2,
+                question: "下列哪种方法用于处理缺失值最合适？",
+                options: ["直接删除所有缺失值", "用均值填充数值型缺失值", "保留缺失值不变", "将缺失值替换为0"],
+                answer: 1,
+                explanation: "用均值填充数值型缺失值是常用的方法，它保持了数据的整体分布特征，是相对中性的处理方式。"
+            },
+            {
+                id: 3,
+                question: "使用3σ原则检测异常值时，数据落在多少范围外被认为是异常？",
+                options: ["1σ", "2σ", "3σ", "4σ"],
+                answer: 2,
+                explanation: "3σ原则认为数据落在(μ-3σ, μ+3σ)区间之外的可能性很小（约0.27%），因此这些点被视为异常值。"
+            },
+            {
+                id: 4,
+                question: "哪个图表最适合展示数据的分布情况？",
+                options: ["饼图", "柱状图", "直方图", "折线图"],
+                answer: 2,
+                explanation: "直方图将数据分成若干区间，展示了数据在不同区间的频率分布，是展示数据分布的最佳选择。"
+            },
+            {
+                id: 5,
+                question: "Pearson相关系数的取值范围是？",
+                options: ["0到1", "-1到0", "-1到1", "0到无穷"],
+                answer: 2,
+                explanation: "Pearson相关系数的取值范围是-1到1，其中1表示完全正相关，-1表示完全负相关，0表示无相关。"
+            },
+            {
+                id: 6,
+                question: "在数据清洗过程中，重复数据应该如何处理？",
+                options: ["保留所有重复项", "删除重复项", "用平均值替代", "标记但不处理"],
+                answer: 1,
+                explanation: "重复数据会干扰分析结果，应该删除重复项。可以使用drop_duplicates()方法删除重复行。"
+            },
+            {
+                id: 7,
+                question: "哪个不是数据可视化的常用库？",
+                options: ["Matplotlib", "Seaborn", "Pandas", "TensorFlow"],
+                answer: 3,
+                explanation: "TensorFlow是深度学习框架，不是数据可视化库。Matplotlib、Seaborn和Pandas都提供了数据可视化功能。"
+            },
+            {
+                id: 8,
+                question: "中位数和均值相比，更适合描述哪种数据的中心趋势？",
+                options: ["正态分布数据", "存在异常值的数据", "均匀分布数据", "二项分布数据"],
+                answer: 1,
+                explanation: "中位数不受异常值影响，当数据存在异常值时，中位数比均值更能准确反映数据的中心趋势。"
+            },
+            {
+                id: 9,
+                question: "在Pandas中，哪个方法用于查看数据的基本信息？",
+                options: ["head()", "describe()", "info()", "shape"],
+                answer: 2,
+                explanation: "info()方法显示DataFrame的数据类型、非空值数量、内存占用等基本信息，是了解数据集的第一步。"
+            },
+            {
+                id: 10,
+                question: "箱线图主要用于展示数据的什么特征？",
+                options: ["变化趋势", "统计特征和异常值", "比例关系", "相关性"],
+                answer: 1,
+                explanation: "箱线图展示数据的最小值、Q1、中位数、Q3、最大值，以及可能的异常值，是分析数据分布的有力工具。"
+            }
+        ];
+
+        // 考试题库
+        const examQuestions = [
+            {
+                question: "数据分析的基本流程包括以下哪些步骤？",
+                options: ["数据收集", "数据清洗", "数据分析", "数据可视化", "以上全部"],
+                answer: 4,
+                explanation: "数据分析的基本流程包括：明确目的→数据收集→数据清洗→数据分析→数据可视化→报告撰写，是一个完整的闭环过程。"
+            },
+            {
+                question: "在处理缺失值时，用中位数填充的优点是？",
+                options: ["计算简单", "不受异常值影响", "保持均值不变", "适用于所有数据类型"],
+                answer: 1,
+                explanation: "中位数不受极端值（异常值）的影响，因此用中位数填充缺失值可以避免异常值对填充结果的影响。"
+            },
+            {
+                question: "哪个不是NumPy的主要功能？",
+                options: ["数值计算", "数组操作", "数据框操作", "线性代数"],
+                answer: 2,
+                explanation: "NumPy主要提供数值计算、数组操作和线性代数功能，数据框操作是Pandas的功能。"
+            },
+            {
+                question: "相关系数r=0.85表示什么？",
+                options: ["弱正相关", "中等正相关", "强正相关", "无相关"],
+                answer: 2,
+                explanation: "当|r|≥0.7时，表示强相关。0.85大于0.7，所以是强正相关，表明两个变量之间有很强的线性关系。"
+            },
+            {
+                question: "散点图主要用于展示？",
+                options: ["时间趋势", "两个变量的关系", "占比构成", "分布情况"],
+                answer: 1,
+                explanation: "散点图用点的位置表示两个变量的值，可以直观地展示两个变量之间的关系和相关性。"
+            },
+            {
+                question: "在Pandas中，删除重复数据的方法是？",
+                options: ["delete_duplicates()", "drop_duplicates()", "remove_duplicates()", "clear_duplicates()"],
+                answer: 1,
+                explanation: "Pandas使用drop_duplicates()方法删除重复行，这是数据清洗中常用的操作。"
+            },
+            {
+                question: "标准差越大，说明数据？",
+                options: ["均值越大", "数据越集中", "数据越分散", "数据越准确"],
+                answer: 2,
+                explanation: "标准差衡量数据的离散程度，标准差越大说明数据越分散，偏离均值的程度越大。"
+            },
+            {
+                question: "Seaborn库相比Matplotlib的优势是？",
+                options: ["速度更快", "语法更简洁，默认样式更美观", "功能更多", "免费开源"],
+                answer: 1,
+                explanation: "Seaborn基于Matplotlib构建，语法更简洁，提供了更美观的默认样式，特别适合统计图表的绘制。"
+            },
+            {
+                question: "IQR四分位距是指？",
+                options: ["最大值与最小值之差", "Q3与Q1之差", "均值与中位数之差", "标准差与方差之差"],
+                answer: 1,
+                explanation: "IQR(Interquartile Range)是第三四分位数(Q3)与第一四分位数(Q1)之差，表示数据中间50%的范围。"
+            },
+            {
+                question: "下列哪种情况不适合用饼图？",
+                options: ["展示各部分占比", "类别数量较少", "类别数量超过5个", "对比差异明显"],
+                answer: 2,
+                explanation: "当类别数量过多时，饼图会变得复杂难以阅读，此时应使用柱状图等其他图表。"
+            },
+            {
+                question: "describe()方法默认统计哪些指标？",
+                options: ["仅均值", "均值、标准差、最小值、最大值", "仅计数", "相关系数"],
+                answer: 1,
+                explanation: "Pandas的describe()方法默认统计count、mean、std、min、25%、50%、75%、max这些描述性统计指标。"
+            },
+            {
+                question: "异常值的检测方法不包括？",
+                options: ["3σ原则", "IQR方法", "删除法", "Z-score方法"],
+                answer: 2,
+                explanation: "3σ原则、IQR方法和Z-score都是异常值检测方法，删除法是处理异常值的方式，不是检测方法。"
+            },
+            {
+                question: "将分类变量转换为数值型变量的常用方法是？",
+                options: ["to_numeric()", "astype()", "get_dummies()", "to_datetime()"],
+                answer: 2,
+                explanation: "get_dummies()用于独热编码(One-Hot Encoding)，将分类变量转换为数值型，是机器学习中的常用预处理方法。"
+            },
+            {
+                question: "折线图最适合展示？",
+                options: ["类别对比", "占比构成", "时间趋势", "分布情况"],
+                answer: 2,
+                explanation: "折线图用线段连接数据点，最适合展示数据随时间变化的趋势，是时间序列数据分析的首选。"
+            },
+            {
+                question: "数据分析报告应该包含哪些内容？",
+                options: ["分析目的", "数据和方法", "结果和结论", "以上全部"],
+                answer: 3,
+                explanation: "一份完整的数据分析报告应包含：分析背景和目的、使用的材料和方法、主要结果、结论和建议。"
+            },
+            {
+                question: "在数据预处理阶段，最优先应该做的是？",
+                options: ["数据可视化", "数据建模", "理解数据和明确问题", "数据清洗"],
+                answer: 2,
+                explanation: "在开始任何处理之前，首先要理解数据，明确分析目的，这会影响后续所有的数据处理和建模决策。"
+            },
+            {
+                question: "Pandas中用于数据聚合的函数是？",
+                options: ["map()", "apply()", "groupby()", "filter()"],
+                answer: 2,
+                explanation: "groupby()是Pandas中最重要的数据聚合函数，可以按一个或多个列分组，然后进行聚合计算。"
+            },
+            {
+                question: "直方图和柱状图的主要区别是？",
+                options: ["颜色不同", "直方图用于连续数据，柱状图用于分类数据", "大小不同", "没有区别"],
+                answer: 1,
+                explanation: "直方图用于展示连续变量的分布，各区间是连续的；柱状图用于比较不同类别的数值，类别是离散的。"
+            },
+            {
+                question: "方差为0意味着什么？",
+                options: ["所有数据都相等", "数据全为0", "均值为0", "标准差为0"],
+                answer: 0,
+                explanation: "方差为0表示所有数据都等于均值，即所有数据值都相同，没有离散程度。"
+            },
+            {
+                question: "数据可视化的主要目的是？",
+                options: ["让图表更好看", "更直观地理解数据", "减少数据量", "删除异常值"],
+                answer: 1,
+                explanation: "数据可视化通过图形化方式展示数据，帮助人们更直观、快速地理解数据特征和规律，是数据分析的重要环节。"
+            }
+        ];
+
+        // 考试状态
+        let examState = {
+            currentQuestion: 0,
+            answers: [],
+            startTime: null,
+            timerInterval: null,
+            isExamStarted: false,
+            examSubmitted: false
+        };
+
+        // 显示页面
+        function showPage(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            
+            switch(page) {
+                case 'main':
+                    document.getElementById('mainPage').classList.add('active');
+                    break;
+                case 'knowledge':
+                    document.getElementById('knowledgePage').classList.add('active');
+                    break;
+                case 'exercises':
+                    renderExercises();
+                    document.getElementById('exercisesPage').classList.add('active');
+                    break;
+                case 'exam':
+                    if (!examState.isExamStarted) {
+                        showExamStart();
+                    }
+                    document.getElementById('examPage').classList.add('active');
+                    break;
+                case 'results':
+                    renderResults();
+                    document.getElementById('resultsPage').classList.add('active');
+                    break;
+            }
+        }
+
+        // 渲染练习题
+        function renderExercises() {
+            const container = document.getElementById('exerciseContainer');
+            container.innerHTML = exercises.map((ex, index) => `
+                <div class="exercise-item" id="exercise-${ex.id}">
+                    <span class="exercise-number">练习 ${ex.id}</span>
+                    <div class="exercise-question">${ex.question}</div>
+                    <div class="exercise-options">
+                        ${ex.options.map((opt, i) => `
+                            <button class="option-btn" onclick="selectExerciseOption(${ex.id}, ${i})">
+                                ${String.fromCharCode(65 + i)}. ${opt}
+                            </button>
+                        `).join('')}
+                    </div>
+                    <div id="exercise-result-${ex.id}" style="margin-top: 1rem;"></div>
+                    <button class="submit-exercise-btn" onclick="submitExercise(${ex.id})" id="submit-btn-${ex.id}">
+                        提交答案
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // 选择练习选项
+        function selectExerciseOption(exerciseId, optionIndex) {
+            const buttons = document.querySelectorAll(`#exercise-${exerciseId} .option-btn`);
+            buttons.forEach(btn => btn.classList.remove('selected'));
+            buttons[optionIndex].classList.add('selected');
+            buttons[optionIndex].dataset.selected = optionIndex;
+        }
+
+        // 提交练习答案
+        function submitExercise(exerciseId) {
+            const exercise = exercises.find(ex => ex.id === exerciseId);
+            const selectedBtn = document.querySelector(`#exercise-${exerciseId} .option-btn.selected`);
+            const resultDiv = document.getElementById(`exercise-result-${exerciseId}`);
+            const submitBtn = document.getElementById(`submit-btn-${exerciseId}`);
+            const buttons = document.querySelectorAll(`#exercise-${exerciseId} .option-btn`);
+
+            if (!selectedBtn) {
+                alert('请先选择一个答案！');
+                return;
+            }
+
+            const userAnswer = parseInt(selectedBtn.dataset.selected);
+
+            // 显示结果
+            buttons.forEach((btn, i) => {
+                btn.disabled = true;
+                if (i === exercise.answer) {
+                    btn.classList.add('correct');
+                } else if (i === userAnswer && userAnswer !== exercise.answer) {
+                    btn.classList.add('wrong');
+                }
+            });
+
+            const isCorrect = userAnswer === exercise.answer;
+            resultDiv.innerHTML = `
+                <div style="padding: 1rem; border-radius: 10px; background: ${isCorrect ? '#d4edda' : '#f8d7da'}; color: ${isCorrect ? '#155724' : '#721c24'};">
+                    <strong>${isCorrect ? '✓ 回答正确！' : '✗ 回答错误'}</strong>
+                </div>
+                <div style="margin-top: 1rem; padding: 1rem; background: #e7f3ff; border-radius: 10px;">
+                    <strong>📖 解析：</strong><br>
+                    ${exercise.explanation}
+                </div>
+            `;
+            submitBtn.style.display = 'none';
+        }
+
+        // 显示考试开始界面
+        function showExamStart() {
+            document.getElementById('examContent').innerHTML = `
+                <div style="text-align: center; padding: 3rem;">
+                    <h2 style="color: #667eea; margin-bottom: 1rem;">📝 在线考试说明</h2>
+                    <div style="background: #f8f9fa; padding: 2rem; border-radius: 15px; text-align: left; max-width: 600px; margin: 0 auto;">
+                        <p style="margin: 1rem 0;"><strong>📋 考试信息：</strong></p>
+                        <ul style="margin-left: 2rem; line-height: 2;">
+                            <li>题目数量：20道选择题</li>
+                            <li>答题时间：30分钟</li>
+                            <li>总分：100分（每题5分）</li>
+                            <li>提交后自动判分</li>
+                        </ul>
+                        <p style="margin: 1rem 0;"><strong>⚠️ 注意事项：</strong></p>
+                        <ul style="margin-left: 2rem; line-height: 2;">
+                            <li>请认真阅读题目后再作答</li>
+                            <li>每题只能选择一个答案</li>
+                            <li>提交后将显示分数和错题解析</li>
+                        </ul>
+                    </div>
+                    <button class="start-btn" onclick="startExam()">
+                        🚀 开始考试
+                    </button>
+                </div>
+            `;
+        }
+
+        // 开始考试
+        function startExam() {
+            examState.isExamStarted = true;
+            examState.currentQuestion = 0;
+            examState.answers = new Array(examQuestions.length).fill(null);
+            examState.startTime = Date.now();
+            examState.examSubmitted = false;
+
+            // 开始计时
+            examState.timerInterval = setInterval(updateTimer, 1000);
+
+            renderExamQuestion();
+        }
+
+        // 更新计时器
+        function updateTimer() {
+            if (examState.examSubmitted) return;
+
+            const elapsed = Date.now() - examState.startTime;
+            const remaining = 30 * 60 * 1000 - elapsed; // 30分钟
+
+            if (remaining <= 0) {
+                submitExam();
+                return;
+            }
+
+            const minutes = Math.floor(remaining / 60000);
+            const seconds = Math.floor((remaining % 60000) / 1000);
+            
+            const timerElement = document.querySelector('.exam-timer');
+            if (timerElement) {
+                timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                if (remaining < 5 * 60 * 1000) { // 少于5分钟变红
+                    timerElement.style.color = '#dc3545';
+                }
+            }
+        }
+
+        // 渲染考试题目
+        function renderExamQuestion() {
+            const q = examQuestions[examState.currentQuestion];
+            const answered = examState.answers[examState.currentQuestion] !== null;
+
+            document.getElementById('examContent').innerHTML = `
+                <div class="exam-header">
+                    <div class="exam-progress">
+                        第 ${examState.currentQuestion + 1} / ${examQuestions.length} 题
+                    </div>
+                    <div class="exam-timer">
+                        ${Math.floor((30 * 60 * 1000 - (Date.now() - examState.startTime)) / 60000).toString().padStart(2, '0')}:
+                        ${Math.floor(((30 * 60 * 1000 - (Date.now() - examState.startTime)) % 60000) / 1000).toString().padStart(2, '0')}
+                    </div>
+                </div>
+
+                <div class="exam-question">
+                    ${q.question}
+                </div>
+
+                <div class="exercise-options">
+                    ${q.options.map((opt, i) => `
+                        <button class="option-btn ${examState.answers[examState.currentQuestion] === i ? 'selected' : ''}" 
+                                onclick="selectExamOption(${i})">
+                            ${String.fromCharCode(65 + i)}. ${opt}
+                        </button>
+                    `).join('')}
+                </div>
+
+                <div class="exam-nav">
+                    <button class="nav-btn" onclick="prevQuestion()" ${examState.currentQuestion === 0 ? 'disabled' : ''}>
+                        ← 上一题
+                    </button>
+                    ${examState.currentQuestion === examQuestions.length - 1 ? `
+                        <button class="nav-btn" onclick="submitExam()" style="background: #28a745;">
+                            ✓ 提交试卷
+                        </button>
+                    ` : `
+                        <button class="nav-btn" onclick="nextQuestion()">
+                            下一题 →
+                        </button>
+                    `}
+                </div>
+
+                <div style="margin-top: 2rem;">
+                    <p style="font-weight: bold; margin-bottom: 0.5rem;">答题进度：</p>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        ${examQuestions.map((_, i) => `
+                            <div style="width: 30px; height: 30px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem;
+                                        background: ${examState.answers[i] !== null ? '#667eea' : '#e0e0e0'}; 
+                                        color: ${examState.answers[i] !== null ? 'white' : '#666'};">
+                                ${i + 1}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 选择考试选项
+        function selectExamOption(optionIndex) {
+            examState.answers[examState.currentQuestion] = optionIndex;
+            renderExamQuestion();
+        }
+
+        // 上一题
+        function prevQuestion() {
+            if (examState.currentQuestion > 0) {
+                examState.currentQuestion--;
+                renderExamQuestion();
+            }
+        }
+
+        // 下一题
+        function nextQuestion() {
+            if (examState.currentQuestion < examQuestions.length - 1) {
+                examState.currentQuestion++;
+                renderExamQuestion();
+            }
+        }
+
+        // 提交试卷
+        function submitExam() {
+            if (examState.examSubmitted) return;
+            
+            examState.examSubmitted = true;
+            clearInterval(examState.timerInterval);
+
+            // 计算分数
+            let score = 0;
+            let wrongQuestions = [];
+
+            examQuestions.forEach((q, i) => {
+                if (examState.answers[i] === q.answer) {
+                    score += 5;
+                } else {
+                    wrongQuestions.push({
+                        question: q.question,
+                        userAnswer: examState.answers[i] !== null ? q.options[examState.answers[i]] : '未作答',
+                        correctAnswer: q.options[q.answer],
+                        explanation: q.explanation
+                    });
+                }
+            });
+
+            const percentage = (score / 100) * 100;
+
+            // 保存成绩
+            const result = {
+                score: score,
+                percentage: percentage,
+                wrongQuestions: wrongQuestions,
+                date: new Date().toLocaleString()
+            };
+            localStorage.setItem('examResult', JSON.stringify(result));
+
+            // 显示成绩
+            document.getElementById('examContent').innerHTML = `
+                <div class="score-display">
+                    <div class="score-label">您的得分</div>
+                    <div class="score-number">${score} 分</div>
+                    <div style="font-size: 1.2rem; margin-top: 1rem;">
+                        ${percentage >= 90 ? '🏆 优秀！' : percentage >= 60 ? '👍 良好！' : '💪 继续努力！'}
+                    </div>
+                    <div style="margin-top: 1rem; font-size: 1rem;">
+                        正确率：${percentage}%
+                    </div>
+                </div>
+
+                ${wrongQuestions.length > 0 ? `
+                    <h3 style="margin: 2rem 0 1rem; color: #dc3545;">❌ 错题分析 (${wrongQuestions.length}题)</h3>
+                    <div class="wrong-questions">
+                        ${wrongQuestions.map((wq, i) => `
+                            <div class="wrong-item">
+                                <div class="wrong-question">${i + 1}. ${wq.question}</div>
+                                <div class="wrong-answer">✗ 您的答案：${wq.userAnswer}</div>
+                                <div class="correct-answer">✓ 正确答案：${wq.correctAnswer}</div>
+                                <div class="analysis">
+                                    <strong>📖 解析：</strong>${wq.explanation}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '<p style="text-align: center; color: #28a745; font-size: 1.2rem; margin: 2rem 0;">🎉 恭喜您！全部答对！</p>'}
+
+                <button class="back-btn" style="width: 100%; justify-content: center; margin-top: 2rem;" onclick="showPage('results')">
+                    📊 查看详细成绩
+                </button>
+            `;
+        }
+
+        // 渲染成绩页面
+        function renderResults() {
+            const result = JSON.parse(localStorage.getItem('examResult') || '{}');
+            const container = document.getElementById('resultsContent');
+
+            if (!result.score && result.score !== 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 3rem;">
+                        <div style="font-size: 4rem; margin-bottom: 1rem;">📊</div>
+                        <h2 style="color: #666; margin-bottom: 1rem;">暂无考试成绩</h2>
+                        <p style="color: #999; margin-bottom: 2rem;">完成考试后可以在这里查看成绩分析</p>
+                        <button class="start-btn" onclick="showPage('exam')">
+                            🚀 去考试
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="score-display">
+                    <div class="score-label">考试得分</div>
+                    <div class="score-number">${result.score} 分</div>
+                    <div style="font-size: 1.2rem; margin-top: 1rem;">
+                        ${result.percentage >= 90 ? '🏆 优秀！' : result.percentage >= 60 ? '👍 良好！' : '💪 继续努力！'}
+                    </div>
+                    <div style="margin-top: 1rem; font-size: 0.9rem;">
+                        考试时间：${result.date}
+                    </div>
+                </div>
+
+                <div style="margin: 2rem 0;">
+                    <h3 style="margin-bottom: 1rem;">📈 学习统计</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                        <div style="background: #e7f3ff; padding: 1.5rem; border-radius: 10px; text-align: center;">
+                            <div style="font-size: 2rem; font-weight: bold; color: #667eea;">${result.score}</div>
+                            <div style="color: #666;">得分</div>
+                        </div>
+                        <div style="background: #fff3cd; padding: 1.5rem; border-radius: 10px; text-align: center;">
+                            <div style="font-size: 2rem; font-weight: bold; color: #ffc107;">${result.wrongQuestions.length}</div>
+                            <div style="color: #666;">错题数</div>
+                        </div>
+                        <div style="background: #d4edda; padding: 1.5rem; border-radius: 10px; text-align: center;">
+                            <div style="font-size: 2rem; font-weight: bold; color: #28a745;">${20 - result.wrongQuestions.length}</div>
+                            <div style="color: #666;">正确数</div>
+                        </div>
+                    </div>
+
+                    <div class="progress-bar" style="margin-top: 1rem;">
+                        <div class="progress-fill" style="width: ${result.percentage}%;"></div>
+                    </div>
+                    <div style="text-align: center; margin-top: 0.5rem; color: #666;">
+                        正确率：${result.percentage}%
+                    </div>
+                </div>
+
+                ${result.wrongQuestions.length > 0 ? `
+                    <div class="wrong-questions">
+                        <h3 style="margin-bottom: 1rem; color: #dc3545;">❌ 错题复习</h3>
+                        ${result.wrongQuestions.map((wq, i) => `
+                            <div class="wrong-item">
+                                <div class="wrong-question">${i + 1}. ${wq.question}</div>
+                                <div class="wrong-answer">✗ 您的答案：${wq.userAnswer}</div>
+                                <div class="correct-answer">✓ 正确答案：${wq.correctAnswer}</div>
+                                <div class="analysis">
+                                    <strong>📖 解析：</strong>${wq.explanation}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+
+                <button class="start-btn" onclick="showPage('exam')" style="margin-top: 2rem;">
+                    🔄 重新考试
+                </button>
+            `;
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            showPage('main');
+        });
+    </script>
+</body>
+</html>
