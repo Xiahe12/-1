@@ -142,7 +142,7 @@ const mockChapters: Chapter[] = [
     id: 'chapter-2',
     courseId: 'course-1',
     title: 'Python基础语法',
-    content: '变量、数据类型、运算符、控制结构等基础语法。\n\n【变量与数据类型】\nPython中的变量不需要声明类型，直接赋值即可。常用数据类型包括：\n\n• 整数(int)：如 10, -5, 0\n• 浮点数(float)：如 3.14, -2.5\n• 字符串(str)：如 "Hello", '\''Python'\''\n• 布尔值(bool)：True, False\n• 列表(list)：如 [1, 2, 3]\n• 字典(dict)：如 {\'name\': '\''Alice'\'', '\''age'\'': 20}\n\n【运算符】\n• 算术运算符：+, -, *, /, //, %, **\n• 比较运算符：==, !=, <, >, <=, >=\n• 逻辑运算符：and, or, not\n\n【控制结构】\n条件语句：if-elif-else\n循环语句：for循环、while循环\n\n【实战练习】\n编写一个计算器程序，实现加减乘除运算',
+    content: '变量、数据类型、运算符、控制结构等基础语法。\n\n【变量与数据类型】\nPython中的变量不需要声明类型，直接赋值即可。常用数据类型包括：\n\n• 整数(int)：如 10, -5, 0\n• 浮点数(float)：如 3.14, -2.5\n• 字符串(str)：如 "Hello", "Python"\n• 布尔值(bool)：True, False\n• 列表(list)：如 [1, 2, 3]\n• 字典(dict)：如 {"name": "Alice", "age": 20}\n\n【运算符】\n• 算术运算符：+, -, *, /, //, %, **\n• 比较运算符：==, !=, <, >, <=, >=\n• 逻辑运算符：and, or, not\n\n【控制结构】\n条件语句：if-elif-else\n循环语句：for循环、while循环\n\n【实战练习】\n编写一个计算器程序，实现加减乘除运算',
     isCompleted: true,
     completedAt: new Date('2024-09-15').toISOString(),
     studyDurationMinutes: 90,
@@ -272,7 +272,7 @@ const mockChapters: Chapter[] = [
         id: 'ex-6-2',
         type: 'code',
         question: '使用Pandas填充DataFrame中的缺失值为0',
-        codeTemplate: 'import pandas as pd\nimport numpy as np\n\ndf = pd.DataFrame({\n    '\''A'\'': [1, 2, np.nan, 4],\n    '\''B'\'': [5, np.nan, 7, 8]\n})\n\n# 填充缺失值为0\ndf_filled = ___  # 请填写代码\nprint(df_filled)',
+        codeTemplate: 'import pandas as pd\nimport numpy as np\n\ndf = pd.DataFrame({\n    "A": [1, 2, np.nan, 4],\n    "B": [5, np.nan, 7, 8]\n})\n\n# 填充缺失值为0\ndf_filled = ___  # 请填写代码\nprint(df_filled)',
         answer: 'df.fillna(0)',
         explanation: '使用fillna()方法可以填充缺失值，传入0表示用0填充所有缺失值。'
       }
@@ -298,7 +298,7 @@ const mockChapters: Chapter[] = [
         id: 'ex-7-2',
         type: 'code',
         question: '使用Matplotlib绘制一个简单的柱状图',
-        codeTemplate: 'import matplotlib.pyplot as plt\n\ncategories = ['Python', 'Java', 'C++', 'JavaScript']\nvalues = [40, 30, 20, 10]\n\n# 绘制柱状图\nplt.___(categories, values)  # 填写函数名\nplt.title(\'编程语言使用占比\')\nplt.show()',
+        codeTemplate: 'import matplotlib.pyplot as plt\n\ncategories = ["Python", "Java", "C++", "JavaScript"]\nvalues = [40, 30, 20, 10]\n\n# 绘制柱状图\nplt.___(categories, values)  # 填写函数名\nplt.title("编程语言使用占比")\nplt.show()',
         answer: 'plt.bar',
         explanation: 'plt.bar()函数用于绘制柱状图，第一个参数是类别，第二个参数是对应的数值。'
       }
@@ -338,7 +338,7 @@ const mockChapters: Chapter[] = [
     id: 'chapter-9',
     courseId: 'course-3',
     title: '使用Python进行数据采集',
-    content: 'requests、BeautifulSoup、Scrapy等库的使用。\n\n【Requests库】\n最常用的HTTP库，用于发送各种HTTP请求。\n\nimport requests\n\nresponse = requests.get(url)\nresponse.status_code  # 状态码\nresponse.text  # 响应内容\nresponse.json()  # JSON响应\n\n【BeautifulSoup解析】\n用于从HTML中提取需要的数据。\n\nfrom bs4 import BeautifulSoup\n\nsoup = BeautifulSoup(html, '\''lxml'\'')\ntitles = soup.find_all(\''h2'\'', class_=\''title'\'')\ncontent = soup.select(\''.article .text\')\n\n【CSS选择器】\n• tag：标签选择器\n• .class：类选择器\n• #id：ID选择器\n• tag.class：组合选择器\n\n【数据存储】\n• CSV文件：使用Pandas的to_csv()\n• Excel文件：使用Pandas的to_excel()\n• 数据库：使用SQLAlchemy\n• JSON文件：使用json模块\n\n【实战项目】\n爬取豆瓣电影Top250的电影信息，包括：\n• 电影名称\n• 评分\n• 评论数\n• 上映年份\n• 导演和演员',
+    content: 'requests、BeautifulSoup、Scrapy等库的使用。\n\n【Requests库】\n最常用的HTTP库，用于发送各种HTTP请求。\n\nimport requests\n\nresponse = requests.get(url)\nresponse.status_code  # 状态码\nresponse.text  # 响应内容\nresponse.json()  # JSON响应\n\n【BeautifulSoup解析】\n用于从HTML中提取需要的数据。\n\nfrom bs4 import BeautifulSoup\n\nsoup = BeautifulSoup(html, "lxml")\ntitles = soup.find_all("h2", class_="title")\ncontent = soup.select(".article .text")\n\n【CSS选择器】\n• tag：标签选择器\n• .class：类选择器\n• #id：ID选择器\n• tag.class：组合选择器\n\n【数据存储】\n• CSV文件：使用Pandas的to_csv()\n• Excel文件：使用Pandas的to_excel()\n• 数据库：使用SQLAlchemy\n• JSON文件：使用json模块\n\n【实战项目】\n爬取豆瓣电影Top250的电影信息，包括：\n• 电影名称\n• 评分\n• 评论数\n• 上映年份\n• 导演和演员',
     isCompleted: false,
     keyPoints: ['Requests发送HTTP请求', 'BeautifulSoup解析HTML', 'CSS选择器的使用', '数据存储方法'],
     exercises: [

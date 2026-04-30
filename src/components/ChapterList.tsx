@@ -32,14 +32,14 @@ export default function ChapterList({ chapters }: ChapterListProps) {
     })
   }
 
-  const selectAnswer = (chapterId: string, exerciseId: string, answerIndex: number) => {
+  const selectAnswer = (chapterId: string, exerciseId: string, answerIndex: number | string) => {
     setExerciseAnswers(prev => ({
       ...prev,
       [`${chapterId}-${exerciseId}`]: answerIndex
     }))
   }
 
-  const submitExercise = (chapter: Chapter, exercise: Exercise, chapterId: string) => {
+  const submitExercise = (_chapter: Chapter, exercise: Exercise, chapterId: string) => {
     const key = `${chapterId}-${exercise.id}`
     const userAnswer = exerciseAnswers[key]
     if (userAnswer !== undefined) {
