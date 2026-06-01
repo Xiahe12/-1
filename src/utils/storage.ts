@@ -6,6 +6,7 @@ export interface PersistedState {
   notes: any[];
   studyRecords?: any[];
   todayGoals?: any[];
+  studyTasks?: any[];
 }
 
 export const loadState = (): PersistedState | null => {

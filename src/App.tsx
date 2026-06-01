@@ -3,6 +3,8 @@ import Layout from './components/Layout'
 import Home from './pages/Home'
 import Courses from './pages/Courses'
 import CourseDetail from './pages/CourseDetail'
+import StudyData from './pages/StudyData'
+import StudyTasks from './pages/StudyTasks'
 
 function App() {
   return (
@@ -12,6 +14,8 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/courses" element={<Courses />} />
           <Route path="/courses/:id" element={<CourseDetail />} />
+          <Route path="/study-data" element={<StudyData />} />
+          <Route path="/study-tasks" element={<StudyTasks />} />
         </Routes>
       </Layout>
     </Router>

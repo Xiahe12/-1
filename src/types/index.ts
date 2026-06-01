@@ -60,12 +60,23 @@ export interface TodayGoal {
   isCompleted: boolean;
 }
 
+export interface StudyTask {
+  id: string;
+  title: string;
+  description?: string;
+  isCompleted: boolean;
+  createdAt: string;
+  priority: 'low' | 'medium' | 'high';
+  dueDate?: string;
+}
+
 export interface AppState {
   courses: Course[];
   chapters: Chapter[];
   notes: Note[];
   studyRecords: StudyRecord[];
   todayGoals: TodayGoal[];
+  studyTasks: StudyTask[];
   addCourse: (course: Omit<Course, 'id' | 'createdAt' | 'updatedAt' | 'progress'>) => void;
   updateCourse: (id: string, updates: Partial<Course>) => void;
   deleteCourse: (id: string) => void;
@@ -79,6 +90,11 @@ export interface AppState {
   addStudyRecord: (record: Omit<StudyRecord, 'id'>) => void;
   addTodayGoal: (goal: Omit<TodayGoal, 'id' | 'completedMinutes' | 'isCompleted'>) => void;
   updateTodayGoal: (id: string, updates: Partial<TodayGoal>) => void;
+  adjustTodayGoalMinutes: (id: string, delta: number) => void;
+  addStudyTask: (task: Omit<StudyTask, 'id' | 'createdAt'>) => void;
+  toggleStudyTask: (id: string) => void;
+  updateStudyTask: (id: string, updates: Partial<StudyTask>) => void;
+  deleteStudyTask: (id: string) => void;
   getTotalCourses: () => number;
   getCompletedCourses: () => number;
   getTotalStudyTime: () => number;
