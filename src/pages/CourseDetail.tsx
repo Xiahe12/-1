@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { BookOpen, Calendar, ArrowLeft, PlayCircle, CheckCircle2, Clock, Award, FileText, Link as LinkIcon, Sparkles, GraduationCap } from 'lucide-react'
+import { BookOpen, Calendar, ArrowLeft, PlayCircle, CheckCircle2, Clock, Award, FileText, Link as LinkIcon, GraduationCap } from 'lucide-react'
 import { useAppStore } from '../store'
 import ProgressBar from '../components/ProgressBar'
 import ChapterList from '../components/ChapterList'
@@ -113,25 +113,7 @@ export default function CourseDetail() {
         </div>
       )}
 
-      {/* 掌握技能 */}
-      {course.skills && course.skills.length > 0 && (
-        <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 lg:p-8 shadow-soft border border-gray-100 animate-fade-in-up">
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 sm:mb-6 flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-emerald-600" />
-            你将掌握的技能
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            {course.skills.map((skill, index) => (
-              <div key={index} className="flex items-center gap-3 p-3 sm:p-4 bg-emerald-50 rounded-xl border border-emerald-100 hover:bg-emerald-100 transition-all duration-200">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
-                  {index + 1}
-                </div>
-                <span className="text-sm sm:text-base text-gray-700 font-medium">{skill}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+
 
       {/* 评估方式 */}
       {course.evaluation && (
