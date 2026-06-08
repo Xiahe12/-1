@@ -1580,6 +1580,1103 @@ print()
 print("✓ 端到端分析报告生成完成！")
 `,
     tips: ['可以用 matplotlib/seaborn 生成图表', '报告可以导出为 HTML 或 PDF', '结果保存到数据库方便后续查询']
+  },
+  {
+    id: 'cart-project-1',
+    chapterId: 'chapter-23',
+    title: '用户购物车弃购原因清洗与统计',
+    description: '处理订单表中的时间列格式、缺失支付时间标记弃购，计算弃购率、平均放弃购物车价值。',
+    difficulty: '基础',
+    skills: ['弃购率', '缺失值处理', '数据清洗', '统计对比'],
+    initialCode: `import pandas as pd
+import numpy as np
+from datetime import datetime
+
+# 创建模拟购物车数据
+np.random.seed(42)
+n = 200
+
+data = {
+    '订单ID': range(1, n+1),
+    '用户ID': np.random.randint(1, 51, n),
+    '商品ID': np.random.randint(1, 21, n),
+    '加购时间': pd.date_range('2024-01-01', periods=n, freq='30T'),
+    '是否支付': np.random.choice([0, 1], n, p=[0.35, 0.65]),  # 65%支付率
+    '商品价格': np.random.uniform(20, 500, n).round(2)
+}
+
+df = pd.DataFrame(data)
+
+# 生成支付时间（仅对已支付的订单）
+df['支付时间'] = pd.NaT
+paid_orders = df[df['是否支付'] == 1].index
+df.loc[paid_orders, '支付时间'] = df.loc[paid_orders, '加购时间'] + pd.to_timedelta(
+    np.random.randint(5, 120, len(paid_orders)), unit='m'
+)
+
+# 模拟缺失的支付时间（部分已支付订单忘记记录）
+missing_payment = np.random.choice(paid_orders, size=int(len(paid_orders)*0.1), replace=False)
+df.loc[missing_payment, '支付时间'] = pd.NaT
+
+print("原始数据前10行：")
+print(df.head(10))
+print()
+print("数据类型：")
+print(df.dtypes)
+print()
+print(f"缺失值统计：")
+print(df.isnull().sum())
+print()
+
+# 数据清洗
+# 1. 标记弃购订单（未支付或支付时间缺失）
+df['是否弃购'] = ((df['是否支付'] == 0) | (df['支付时间'].isna())).astype(int)
+
+# 2. 计算弃购时间差
+df['弃购等待时长_分钟'] = (
+    pd.to_datetime('2024-01-31 23:59:59') - df['加购时间']
+).dt.total_seconds() / 60
+
+# 处理时间列格式
+df['加购时间_格式'] = df['加购时间'].dt.strftime('%Y-%m-%d %H:%M')
+df['支付时间_格式'] = df['支付时间'].dt.strftime('%Y-%m-%d %H:%M')
+
+print("清洗后数据前10行：")
+print(df[['订单ID', '用户ID', '商品价格', '是否弃购', '弃购等待时长_分钟']].head(10))
+print()
+
+# 统计分析
+# 计算弃购率
+abandon_rate = df[df['是否弃购'] == 1].shape[0] / df.shape[0]
+print(f"整体弃购率: {abandon_rate:.2%}")
+print()
+
+# 计算平均放弃购物车价值
+avg_abandon_value = df[df['是否弃购'] == 1]['商品价格'].mean()
+print(f"平均放弃购物车价值: ¥{avg_abandon_value:.2f}")
+print()
+
+# 按商品统计弃购情况
+product_stats = df.groupby('商品ID').agg({
+    '是否弃购': ['sum', 'count', 'mean'],
+    '商品价格': 'mean'
+}).round(2)
+product_stats.columns = ['弃购订单数', '总订单数', '弃购率', '平均价格']
+product_stats = product_stats.sort_values('弃购率', ascending=False)
+
+print("高弃购率商品（Top 10）：")
+print(product_stats.head(10))
+print()
+
+# 验证
+assert df[df['是否弃购'] == 1].shape[0] > 0, "没有弃购订单"
+assert not pd.isna(avg_abandon_value), "未能计算平均弃购价值"
+print("✓ 弃购数据分析完成！")
+`,
+    tips: ['弃购率 = 弃购订单数 / 总订单数', '支付时间缺失不等于弃购，需要结合是否支付字段', '弃购等待时长可以分析用户决策时间']
+  },
+  {
+    id: 'cart-project-2',
+    chapterId: 'chapter-24',
+    title: '购物车关联规则挖掘准备（支持→置信度计算）',
+    description: '按交易ID聚合为购物篮格式，计算{牛奶}→{面包}的支持度、置信度。',
+    difficulty: '基础',
+    skills: ['购物篮格式', '关联规则', '支持度', '置信度'],
+    initialCode: `import pandas as pd
+import numpy as np
+
+# 创建模拟交易数据
+np.random.seed(42)
+n_transactions = 100
+
+products = ['牛奶', '面包', '黄油', '鸡蛋', '酸奶', '可乐', '薯片', '饼干', '咖啡', '啤酒']
+
+transactions = []
+for trans_id in range(1, n_transactions+1):
+    # 每个交易1-5个商品
+    n_items = np.random.randint(1, 6)
+    items = np.random.choice(products, n_items, replace=False)
+    for item in items:
+        transactions.append({
+            '交易ID': trans_id,
+            '商品名': item
+        })
+
+df = pd.DataFrame(transactions)
+print("交易明细数据前15行：")
+print(df.head(15))
+print()
+
+# 按交易ID聚合为购物篮格式
+basket = df.groupby('交易ID')['商品名'].apply(list).reset_index()
+basket.columns = ['交易ID', '购物篮']
+print("购物篮格式（前10个）：")
+print(basket.head(10))
+print()
+
+total_trans = len(basket)
+print(f"总交易数: {total_trans}")
+print()
+
+# 计算单个商品的支持度
+item_support = df.groupby('商品名')['交易ID'].nunique() / total_trans
+print("商品支持度（出现频率）：")
+print(item_support.sort_values(ascending=False).round(4))
+print()
+
+# 计算商品共现集合
+def get_item_transactions(item):
+    """获取包含指定商品的交易ID集合"""
+    return set(df[df['商品名'] == item]['交易ID'])
+
+# 计算 {牛奶} 和 {面包} 的支持度和置信度
+milk_trans = get_item_transactions('牛奶')
+bread_trans = get_item_transactions('面包')
+both_trans = milk_trans & bread_trans  # 同时购买牛奶和面包的交易
+
+# 计算支持度
+support_milk = len(milk_trans) / total_trans
+support_bread = len(bread_trans) / total_trans
+support_both = len(both_trans) / total_trans
+
+# 计算置信度 {牛奶} → {面包}
+confidence_milk_to_bread = support_both / support_milk if support_milk > 0 else 0
+
+print("关联规则分析：{牛奶} → {面包}")
+print("-" * 40)
+print(f"牛奶出现次数: {len(milk_trans)}")
+print(f"面包出现次数: {len(bread_trans)}")
+print(f"同时出现次数: {len(both_trans)}")
+print()
+print(f"Support(牛奶) = {support_milk:.4f}")
+print(f"Support(面包) = {support_bread:.4f}")
+print(f"Support(牛奶, 面包) = {support_both:.4f}")
+print(f"Confidence(牛奶→面包) = {confidence_milk_to_bread:.4f}")
+print()
+
+# 找出所有强关联规则
+print("Top 10 关联规则（按置信度）：")
+rules = []
+for item1 in products:
+    for item2 in products:
+        if item1 != item2:
+            set1 = get_item_transactions(item1)
+            set2 = get_item_transactions(item2)
+            both = set1 & set2
+            
+            if len(set1) > 0:
+                supp1 = len(set1) / total_trans
+                supp_both = len(both) / total_trans
+                conf = supp_both / supp1
+                
+                if conf > 0.3:  # 只显示置信度>30%的规则
+                    rules.append({
+                        '前项': item1,
+                        '后项': item2,
+                        '支持度': round(supp_both, 4),
+                        '置信度': round(conf, 4)
+                    })
+
+rules_df = pd.DataFrame(rules)
+if len(rules_df) > 0:
+    print(rules_df.sort_values('置信度', ascending=False).head(10))
+
+assert len(both_trans) > 0, "没有找到共现商品"
+print("\\n✓ 关联规则计算完成！")
+`,
+    tips: ['支持度 = 同时包含A和B的交易数 / 总交易数', '置信度 = Support(A,B) / Support(A)', '提升度 = Confidence(A→B) / Support(B)']
+  },
+  {
+    id: 'cart-project-3',
+    chapterId: 'chapter-25',
+    title: 'RFM用户价值分层（不使用现成库）',
+    description: '计算R（最近消费天数）、F（频次）、M（总金额），将用户按百分位数分为高中低三档。',
+    difficulty: '进阶',
+    skills: ['RFM模型', '用户分层', '百分位数', '价值评估'],
+    initialCode: `import pandas as pd
+import numpy as np
+from datetime import datetime
+
+# 创建模拟销售数据
+np.random.seed(42)
+n_users = 50
+reference_date = datetime(2024, 2, 1)
+
+data = []
+for user_id in range(1, n_users+1):
+    n_purchases = np.random.randint(1, 20)
+    for _ in range(n_purchases):
+        days_ago = np.random.randint(1, 60)
+        purchase_date = reference_date - pd.Timedelta(days=days_ago)
+        amount = np.random.normal(150, 50, 1)[0].round(2)
+        data.append({
+            '用户ID': user_id,
+            '消费日期': purchase_date,
+            '金额': max(amount, 20)
+        })
+
+df = pd.DataFrame(data)
+print("销售明细数据前10行：")
+print(df.head(10))
+print()
+
+# 计算 RFM
+rfm = df.groupby('用户ID').agg({
+    '消费日期': lambda x: (reference_date - x.max()).days,  # R: 最近消费天数
+    '用户ID': 'count',  # F: 频次
+    '金额': 'sum'  # M: 总金额
+}).reset_index()
+
+rfm.columns = ['用户ID', 'R', 'F', 'M']
+print("RFM原始值（前15用户）：")
+print(rfm.head(15))
+print()
+
+# 使用百分位数分层（不分档，使用qcut直接分3档）
+# R: 越小越好（越近越好），所以标签反转
+rfm['R_score'] = pd.qcut(rfm['R'], 3, labels=[3, 2, 1]).astype(int)
+# F: 越大越好
+rfm['F_score'] = pd.qcut(rfm['F'].rank(method='first'), 3, labels=[1, 2, 3]).astype(int)
+# M: 越大越好
+rfm['M_score'] = pd.qcut(rfm['M'].rank(method='first'), 3, labels=[1, 2, 3]).astype(int)
+
+# 计算总分
+rfm['总分'] = rfm['R_score'].astype(int) + rfm['F_score'].astype(int) + rfm['M_score'].astype(int)
+
+print("RFM分层结果（前15用户）：")
+print(rfm.head(15))
+print()
+
+# 用户分层
+def classify_user(row):
+    total = row['总分']
+    if total >= 7:
+        return '高价值用户'
+    elif total >= 5:
+        return '中价值用户'
+    else:
+        return '低价值用户'
+
+rfm['用户分层'] = rfm.apply(classify_user, axis=1)
+
+# 分层统计
+print("用户分层统计：")
+layer_stats = rfm.groupby('用户分层').agg({
+    '用户ID': 'count',
+    'R': 'mean',
+    'F': 'mean',
+    'M': 'mean',
+    '总分': 'mean'
+}).round(2)
+layer_stats.columns = ['用户数', '平均R(最近天数)', '平均F(频次)', '平均M(金额)', '平均总分']
+print(layer_stats)
+print()
+
+# 高价值用户明细
+high_value = rfm[rfm['总分'] >= 7]
+print(f"高价值用户（总分>=7）: {len(high_value)} 人")
+print(high_value[['用户ID', 'R', 'F', 'M', '总分', '用户分层']].sort_values('总分', ascending=False))
+print()
+
+# 验证
+assert '高价值用户' in rfm['用户分层'].values, "没有高价值用户"
+assert rfm['总分'].max() <= 9, "总分计算错误"
+print("✓ RFM用户分层完成！")
+`,
+    tips: ['R越小（F分数越高）、F越大（F分数越高）、M越大（M分数越高）', '总分范围是3-9分', '可以使用qcut自动将数据分成若干等份']
+  },
+  {
+    id: 'cart-project-4',
+    chapterId: 'chapter-26',
+    title: 'K-Means用户分群（基于消费行为）',
+    description: '使用sklearn.cluster.KMeans进行用户分群，分析不同簇的购物车商品类目偏好。',
+    difficulty: '进阶',
+    skills: ['K-Means聚类', '特征工程', '标准化', '消费行为分析'],
+    initialCode: `import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+# 创建模拟用户消费数据
+np.random.seed(42)
+n_users = 100
+
+# 构造有明显分群特征的数据
+data = []
+for i in range(n_users):
+    if i < 35:
+        # 群体1：高消费、低频次、折扣敏感度低
+        monthly_amount = np.random.normal(5000, 800)
+        monthly_freq = np.random.normal(3, 1)
+        discount_sensitivity = np.random.normal(0.1, 0.05)  # 低折扣敏感
+    elif i < 70:
+        # 群体2：中等消费、中等频次
+        monthly_amount = np.random.normal(2000, 400)
+        monthly_freq = np.random.normal(8, 2)
+        discount_sensitivity = np.random.normal(0.25, 0.08)  # 中等折扣敏感
+    else:
+        # 群体3：低消费、高频次、折扣敏感度高
+        monthly_amount = np.random.normal(600, 150)
+        monthly_freq = np.random.normal(15, 3)
+        discount_sensitivity = np.random.normal(0.4, 0.1)  # 高折扣敏感
+    
+    data.append({
+        '用户ID': i + 1,
+        '月消费额': max(monthly_amount, 200),
+        '月均频次': max(monthly_freq, 1),
+        '折扣敏感度': max(discount_sensitivity, 0.01)
+    })
+
+df = pd.DataFrame(data)
+print("用户消费行为数据（前10行）：")
+print(df.head(10))
+print()
+
+# 特征标准化
+features = ['月消费额', '月均频次', '折扣敏感度']
+X = df[features]
+
+scaler = StandardScaler()
+scaled = scaler.fit_transform(X)
+print("标准化后的特征统计：")
+print(pd.DataFrame(scaled, columns=features).describe().round(2))
+print()
+
+# K-Means 聚类
+n_clusters = 3
+kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+df['cluster'] = kmeans.fit_predict(scaled)
+
+print(f"K-Means 聚类结果（k={n_clusters}）：")
+print()
+
+# 分析每个簇的特征
+cluster_stats = df.groupby('cluster').agg({
+    '用户ID': 'count',
+    '月消费额': 'mean',
+    '月均频次': 'mean',
+    '折扣敏感度': 'mean'
+}).round(2)
+cluster_stats.columns = ['用户数', '平均月消费额', '平均月频次', '平均折扣敏感度']
+print(cluster_stats)
+print()
+
+# 为每个簇命名
+cluster_names = {}
+for cluster_id in range(n_clusters):
+    cluster_data = cluster_stats.loc[cluster_id]
+    if cluster_data['平均月消费额'] > 4000:
+        cluster_names[cluster_id] = '高价值低频用户'
+    elif cluster_data['平均月消费额'] > 1500:
+        cluster_names[cluster_id] = '中等价值用户'
+    else:
+        cluster_names[cluster_id] = '高频低额用户'
+
+df['用户群名称'] = df['cluster'].map(cluster_names)
+
+print("各用户群特征：")
+for cluster_id, name in cluster_names.items():
+    cluster_data = df[df['cluster'] == cluster_id]
+    print(f"\\n{name}（簇{cluster_id}）：")
+    print(f"  用户数: {len(cluster_data)}")
+    print(f"  平均月消费: ¥{cluster_data['月消费额'].mean():.2f}")
+    print(f"  平均月频次: {cluster_data['月均频次'].mean():.1f}次")
+    print(f"  折扣敏感度: {cluster_data['折扣敏感度'].mean():.2%}")
+
+# 验证
+assert len(set(df['cluster'])) == n_clusters, "聚类数量不正确"
+print("\\n✓ K-Means用户分群完成！")
+`,
+    tips: ['K-Means前需要先标准化特征', '可以用肘部法则确定最佳k值', '聚类后要为每个群体赋予业务含义']
+  },
+  {
+    id: 'cart-project-5',
+    chapterId: 'chapter-27',
+    title: '购物车加购→支付转化漏斗分析',
+    description: '按session计算加购→支付转化率，识别高加购但低支付的商品。',
+    difficulty: '进阶',
+    skills: ['转化漏斗', 'Session分析', '支付转化率', '商品分析'],
+    initialCode: `import pandas as pd
+import numpy as np
+
+# 创建模拟用户行为日志
+np.random.seed(42)
+n_sessions = 200
+
+data = []
+for session_id in range(1, n_sessions+1):
+    user_id = np.random.randint(1, 51)
+    n_events = np.random.randint(1, 8)
+    
+    events = []
+    for i in range(n_events):
+        event_type = np.random.choice(['加购', '支付', '删除'], p=[0.6, 0.3, 0.1])
+        events.append({
+            'session_id': session_id,
+            '用户ID': user_id,
+            '事件类型': event_type,
+            '商品ID': np.random.randint(1, 21)
+        })
+    data.extend(events)
+
+df = pd.DataFrame(data)
+print("用户行为日志前20行：")
+print(df.head(20))
+print()
+
+# 按session和事件类型统计
+funnel = df.groupby(['session_id', '事件类型']).size().unstack(fill_value=0)
+print("转化漏斗统计（每session各事件数量）：")
+print(funnel.head(10))
+print()
+
+# 计算每个session的转化率
+funnel['总加购数'] = funnel.get('加购', 0)
+funnel['总支付数'] = funnel.get('支付', 0)
+funnel['转化率'] = (funnel['总支付数'] / funnel['总加购数']).replace([np.inf, -np.inf], 0).fillna(0)
+
+print("转化率统计（前15个session）：")
+print(funnel[['总加购数', '总支付数', '转化率']].head(15))
+print()
+
+# 整体转化漏斗
+total_add_to_cart = (df['事件类型'] == '加购').sum()
+total_purchase = (df['事件类型'] == '支付').sum()
+total_abandon = (df['事件类型'] == '删除').sum()
+
+print("=" * 50)
+print("整体转化漏斗")
+print("=" * 50)
+print(f"加购总数: {total_add_to_cart}")
+print(f"支付总数: {total_purchase}")
+print(f"删除总数: {total_abandon}")
+print(f"加购→支付转化率: {total_purchase/total_add_to_cart:.2%}")
+print()
+
+# 按商品分析转化率
+product_funnel = df.groupby(['商品ID', '事件类型']).size().unstack(fill_value=0)
+product_funnel['加购数'] = product_funnel.get('加购', 0)
+product_funnel['支付数'] = product_funnel.get('支付', 0)
+product_funnel['转化率'] = (product_funnel['支付数'] / product_funnel['加购数']).replace([np.inf, -np.inf], 0).fillna(0)
+
+product_funnel = product_funnel.sort_values('转化率', ascending=False)
+
+print("商品转化率排名（Top 15）：")
+print(product_funnel[['加购数', '支付数', '转化率']].head(15).round(4))
+print()
+
+# 识别高加购但低支付的商品
+high_cart_low_pay = product_funnel[
+    (product_funnel['加购数'] > product_funnel['加购数'].median()) & 
+    (product_funnel['转化率'] < product_funnel['转化率'].median())
+]
+
+print("高加购但低支付商品（需要优化）：")
+print(high_cart_low_pay[['加购数', '支付数', '转化率']].sort_values('转化率'))
+print()
+
+# 验证
+assert total_add_to_cart > 0, "没有加购数据"
+assert total_purchase >= 0, "支付数据异常"
+print("✓ 转化漏斗分析完成！")
+`,
+    tips: ['转化率 = 支付数 / 加购数', '高加购低支付商品可能需要优化价格或详情页', '可以用漏斗图可视化转化路径']
+  },
+  {
+    id: 'cart-project-6',
+    chapterId: 'chapter-28',
+    title: '异常购物车行为检测（孤立森林）',
+    description: '使用sklearn.ensemble.IsolationForest标记异常购物车，输出异常购物车的典型特征。',
+    difficulty: '进阶',
+    skills: ['异常检测', 'IsolationForest', '刷单识别', '行为分析'],
+    initialCode: `import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+# 创建模拟购物车数据（包含正常和异常）
+np.random.seed(42)
+n_carts = 500
+
+data = []
+
+# 正常购物车（95%）
+for i in range(int(n_carts * 0.95)):
+    data.append({
+        '购物车ID': i + 1,
+        '商品数': np.random.randint(1, 8),
+        '总价': np.random.uniform(50, 800),
+        '优惠券使用次数': np.random.randint(0, 3)
+    })
+
+# 异常购物车（5%）：刷单/测试单
+for i in range(int(n_carts * 0.03)):
+    # 极端高价
+    data.append({
+        '购物车ID': len(data) + 1,
+        '商品数': np.random.randint(1, 5),
+        '总价': np.random.uniform(5000, 10000),  # 异常高价
+        '优惠券使用次数': np.random.randint(0, 2)
+    })
+
+# 更多异常类型
+for i in range(int(n_carts * 0.02)):
+    # 大量使用优惠券
+    data.append({
+        '购物车ID': len(data) + 1,
+        '商品数': np.random.randint(1, 3),
+        '总价': np.random.uniform(100, 300),
+        '优惠券使用次数': np.random.randint(5, 10)  # 异常高优惠券
+    })
+
+df = pd.DataFrame(data)
+print(f"购物车数据总数: {len(df)}")
+print("购物车数据前10行：")
+print(df.head(10))
+print()
+print("数据统计：")
+print(df.describe().round(2))
+print()
+
+# 使用 IsolationForest 进行异常检测
+features = ['商品数', '总价', '优惠券使用次数']
+X = df[features]
+
+model = IsolationForest(contamination=0.05, random_state=42, n_estimators=100)
+df['异常分'] = model.fit_predict(X)  # -1 表示异常, 1 表示正常
+df['异常概率'] = model.decision_function(X)
+
+print("IsolationForest 异常检测结果：")
+print(f"正常购物车数: {(df['异常分'] == 1).sum()}")
+print(f"异常购物车数: {(df['异常分'] == -1).sum()}")
+print()
+
+# 异常购物车详情
+anomalies = df[df['异常分'] == -1]
+print("异常购物车典型特征：")
+print(anomalies.describe().round(2))
+print()
+
+# 分析异常类型
+print("异常购物车样本（前20个）：")
+print(anomalies.head(20).sort_values('异常概率'))
+print()
+
+# 按异常特征分类
+high_price_anomalies = anomalies[anomalies['总价'] > 1000]
+high_coupon_anomalies = anomalies[anomalies['优惠券使用次数'] >= 5]
+
+print(f"高总价异常: {len(high_price_anomalies)} 个")
+print(f"高优惠券异常: {len(high_coupon_anomalies)} 个")
+print()
+
+# 计算异常得分分布
+print("异常概率分布：")
+print(f"最低异常概率: {df['异常概率'].min():.4f}")
+print(f"最高异常概率: {df['异常概率'].max():.4f}")
+print(f"平均异常概率: {df['异常概率'].mean():.4f}")
+print()
+
+# 验证
+assert len(anomalies) > 0, "没有检测到异常"
+assert len(anomalies) / len(df) < 0.1, "异常比例过高"
+print("✓ 异常购物车行为检测完成！")
+`,
+    tips: ['contamination参数表示预期的异常比例', '异常分=-1表示异常，1表示正常', '可以用decision_function查看异常程度']
+  },
+  {
+    id: 'cart-project-7',
+    chapterId: 'chapter-29',
+    title: '时序购物车趋势预测（移动平均/指数平滑）',
+    description: '使用pandas.rolling计算7日均线，识别周末效应及促销日峰值。',
+    difficulty: '进阶',
+    skills: ['时间序列', '移动平均', '趋势预测', '周末效应'],
+    initialCode: `import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+
+# 创建模拟时间序列数据（包含趋势、周末效应、促销日）
+np.random.seed(42)
+n_days = 90
+start_date = datetime(2024, 1, 1)
+
+dates = []
+carts_created = []
+purchases = []
+
+base_cart = 100
+base_purchase_rate = 0.6
+
+for i in range(n_days):
+    current_date = start_date + timedelta(days=i)
+    dates.append(current_date)
+    
+    # 基础趋势（缓慢增长）
+    trend = 100 + i * 0.5
+    
+    # 周末效应（周末高20%）
+    if current_date.weekday() >= 5:  # 周六、周日
+        weekend_effect = 1.2
+    else:
+        weekend_effect = 1.0
+    
+    # 促销日效应（每月10号、20号打9折）
+    if current_date.day in [10, 20]:
+        promotion_effect = 1.5
+    else:
+        promotion_effect = 1.0
+    
+    # 计算购物车创建数
+    daily_cart = int(base_cart * trend / 100 * weekend_effect * promotion_effect + np.random.normal(0, 10))
+    carts_created.append(max(daily_cart, 50))
+    
+    # 计算支付数（受转化率影响）
+    purchase_rate = base_purchase_rate * (0.9 if current_date.weekday() >= 5 else 1.0)
+    daily_purchase = int(daily_cart * purchase_rate + np.random.normal(0, 5))
+    purchases.append(max(daily_purchase, 20))
+
+df = pd.DataFrame({
+    '日期': dates,
+    '购物车创建数': carts_created,
+    '支付数': purchases
+})
+df.set_index('日期', inplace=True)
+
+print("时序数据前20天：")
+print(df.head(20))
+print()
+
+# 计算7日移动平均
+df['车量_7d_avg'] = df['购物车创建数'].rolling(7, center=True).mean()
+df['支付_7d_avg'] = df['支付数'].rolling(7, center=True).mean()
+
+# 计算支付率
+df['支付率'] = df['支付数'] / df['购物车创建数']
+df['支付率_7d'] = df['支付率'].rolling(7, center=True).mean()
+
+print("移动平均统计（最近20天）：")
+print(df[['购物车创建数', '车量_7d_avg', '支付数', '支付率', '支付率_7d']].tail(20).round(4))
+print()
+
+# 周末效应分析
+df['星期'] = df.index.dayofweek
+weekend_data = df[df['星期'] >= 5]
+weekday_data = df[df['星期'] < 5]
+
+print("周末 vs 工作日效应：")
+print(f"工作日平均购物车创建数: {weekday_data['购物车创建数'].mean():.1f}")
+print(f"周末平均购物车创建数: {weekend_data['购物车创建数'].mean():.1f}")
+print(f"周末提升幅度: {(weekend_data['购物车创建数'].mean() / weekday_data['购物车创建数'].mean() - 1) * 100:.1f}%")
+print()
+
+# 促销日识别
+df['是否促销日'] = df.index.day.isin([10, 20])
+promotion_data = df[df['是否促销日']]
+normal_data = df[~df['是否促销日']]
+
+print("促销日 vs 普通日：")
+print(f"普通日平均购物车创建数: {normal_data['购物车创建数'].mean():.1f}")
+print(f"促销日平均购物车创建数: {promotion_data['购物车创建数'].mean():.1f}")
+print()
+
+# 识别峰值日期
+threshold = df['购物车创建数'].mean() + 2 * df['购物车创建数'].std()
+peak_days = df[df['购物车创建数'] > threshold]
+
+print(f"峰值日期识别（>均值+2σ = {threshold:.0f}）：")
+print(peak_days[['购物车创建数', '车量_7d_avg']].sort_values('购物车创建数', ascending=False))
+print()
+
+# 验证
+assert len(df['车量_7d_avg'].dropna()) > 0, "移动平均计算失败"
+assert df['支付率'].mean() > 0, "支付率计算失败"
+print("✓ 时序趋势分析完成！")
+`,
+    tips: ['rolling(7)计算7日移动平均', 'center=True让均值居中', '可以用shift()做预测而不是平滑']
+  },
+  {
+    id: 'cart-project-8',
+    chapterId: 'chapter-30',
+    title: '基于购物车内容的交叉销售推荐验证',
+    description: '构建共现矩阵，对给定商品推荐最常一起加购的商品配件。',
+    difficulty: '进阶',
+    skills: ['交叉销售', '共现矩阵', '推荐系统', '商品关联'],
+    initialCode: `import pandas as pd
+import numpy as np
+
+# 创建模拟购物车数据
+np.random.seed(42)
+n_carts = 300
+
+# 定义商品关联
+product_rules = {
+    '手机': ['手机壳', '钢化膜', '充电宝', '蓝牙耳机'],
+    '笔记本电脑': ['鼠标', '键盘', '电脑包'],
+    'T恤': ['牛仔裤', '运动鞋'],
+    '奶粉': ['奶瓶', '纸尿裤']
+}
+
+# 生成购物车数据
+data = []
+for cart_id in range(1, n_carts+1):
+    # 70%的购物车包含关联商品对
+    if np.random.random() < 0.7:
+        base_product = np.random.choice(list(product_rules.keys()))
+        related_products = product_rules[base_product]
+        n_related = np.random.randint(1, len(related_products)+1)
+        items = [base_product] + list(np.random.choice(related_products, n_related, replace=False))
+    else:
+        # 30%随机商品
+        all_products = ['手机', '手机壳', '钢化膜', '充电宝', '蓝牙耳机', 
+                       '笔记本电脑', '鼠标', '键盘', '电脑包', 'T恤', 
+                       '牛仔裤', '运动鞋', '奶粉', '奶瓶', '纸尿裤']
+        n_items = np.random.randint(1, 4)
+        items = np.random.choice(all_products, n_items, replace=False)
+    
+    for item in items:
+        data.append({
+            '购物车ID': cart_id,
+            '商品名': item
+        })
+
+df = pd.DataFrame(data)
+print("购物车商品明细数据（前20行）：")
+print(df.head(20))
+print()
+
+# 构建共现矩阵
+co_occur = df.pivot_table(index='购物车ID', columns='商品名', aggfunc='size', fill_value=0)
+print(f"共现矩阵形状: {co_occur.shape}")
+print("共现矩阵（前5个购物车）：")
+print(co_occur.head())
+print()
+
+# 计算商品共现次数矩阵
+co_occur_T = co_occur.T.dot(co_occur)
+print("商品共现矩阵（Top 5）：")
+print(co_occur_T.iloc[:5, :5])
+print()
+
+# 交叉销售推荐：为指定商品推荐配件
+def recommend_accessories(target_product, co_occur_matrix, top_n=3):
+    """为目标商品推荐配件"""
+    if target_product not in co_occur_matrix.columns:
+        return []
+    
+    # 获取与目标商品共现的次数
+    co_counts = co_occur_matrix[target_product].copy()
+    
+    # 排除自身
+    co_counts = co_counts.drop(target_product, errors='ignore')
+    
+    # 获取目标商品的出现次数
+    target_count = co_occur_matrix[target_product][target_product]
+    
+    # 计算共现率
+    co_rate = (co_counts / target_count).sort_values(ascending=False)
+    
+    # 返回Top N推荐
+    recommendations = co_rate.head(top_n)
+    return recommendations
+
+# 为"手机"推荐配件
+target = '手机'
+recommendations = recommend_accessories(target, co_occur_T, top_n=3)
+
+print(f"为 '{target}' 推荐的配件（Top 3）：")
+for product, rate in recommendations.items():
+    print(f"  {product}: 共现率 {rate:.2%}")
+
+# 完整推荐列表
+print(f"\\n'{target}' 的完整配件推荐：")
+all_recommendations = recommend_accessories(target, co_occur_T, top_n=len(co_occur_T))
+for product, rate in all_recommendations.items():
+    print(f"  {product}: {rate:.2%}")
+
+# 多商品推荐示例
+print("\\n其他商品推荐：")
+for product in ['笔记本电脑', 'T恤', '奶粉']:
+    recs = recommend_accessories(product, co_occur_T, top_n=3)
+    if len(recs) > 0:
+        print(f"  {product} → {', '.join(recs.index[:3])}")
+
+# 验证
+assert target in co_occur_T.columns, "目标商品不在共现矩阵中"
+assert len(recommendations) > 0, "没有找到推荐"
+print("\\n✓ 交叉销售推荐完成！")
+`,
+    tips: ['共现率 = A和B同时出现的次数 / A出现的次数', '可以按共现次数或共现率排序', '关联商品对可以用于商品捆绑销售']
+  },
+  {
+    id: 'cart-project-9',
+    chapterId: 'chapter-31',
+    title: '购物车放弃原因归因（决策树/分组均值对比）',
+    description: '分组对比弃购/支付用户的平均运费和优惠券金额，使用pandas.cut计算各箱弃购率。',
+    difficulty: '进阶',
+    skills: ['归因分析', '决策树', '弃购分析', '价格敏感度'],
+    initialCode: `import pandas as pd
+import numpy as np
+
+# 创建模拟购物车数据
+np.random.seed(42)
+n_carts = 500
+
+# 生成运费数据（0-100元）
+freight = np.random.exponential(scale=15, size=n_carts).clip(0, 100)
+
+# 生成优惠券金额（0-50元，与运费负相关）
+coupon = (50 - freight * 0.3 + np.random.normal(0, 10)).clip(0, 50)
+
+# 页面停留时间（秒）
+stay_time = np.random.exponential(scale=120, size=n_carts)
+
+# 生成是否弃购（与多个因素相关）
+# 高运费、高页面停留时间更容易弃购
+# 高优惠券更容易支付
+prob_abandon = (
+    0.4 +  # 基础弃购率
+    freight / 200 +  # 运费越高越可能弃购
+    (stay_time > 300).astype(float) * 0.2 -  # 停留太久可能放弃
+    coupon / 100 -  # 优惠券越高越可能支付
+    0.1
+)
+is_abandon = (np.random.random(n_carts) < prob_abandon).astype(int)
+
+df = pd.DataFrame({
+    '购物车ID': range(1, n_carts+1),
+    '运费': freight.round(2),
+    '优惠券金额': coupon.round(2),
+    '页面停留时间': stay_time.round(0).astype(int),
+    '是否弃购': is_abandon
+})
+
+print("购物车数据前10行：")
+print(df.head(10))
+print()
+
+# 分组对比分析
+abandon_group = df[df['是否弃购'] == 1]
+pay_group = df[df['是否弃购'] == 0]
+
+print("弃购用户 vs 支付用户对比：")
+print("-" * 50)
+print(f"{'指标':<15} {'弃购用户':<15} {'支付用户':<15}")
+print("-" * 50)
+print(f"{'平均运费':<15} ¥{abandon_group['运费'].mean():>10.2f}  ¥{pay_group['运费'].mean():>10.2f}")
+print(f"{'平均优惠券':<15} ¥{abandon_group['优惠券金额'].mean():>10.2f}  ¥{pay_group['优惠券金额'].mean():>10.2f}")
+print(f"{'平均停留时间':<15} {abandon_group['页面停留时间'].mean():>10.0f}秒 {pay_group['页面停留时间'].mean():>10.0f}秒")
+print(f"{'人数':<15} {len(abandon_group):>10}  {len(pay_group):>10}")
+print()
+
+# 使用pd.cut将运费分箱
+bins = [0, 5, 10, 20, 50, 100]
+labels = ['0-5元', '5-10元', '10-20元', '20-50元', '50-100元']
+df['运费区间'] = pd.cut(df['运费'], bins=bins, labels=labels)
+
+# 计算各箱的弃购率
+abandon_rate_by_freight = df.groupby('运费区间', observed=True)['是否弃购'].mean()
+
+print("各运费区间的弃购率：")
+for freight_range, rate in abandon_rate_by_freight.items():
+    print(f"  {freight_range}: {rate:.2%}")
+
+# 同样对优惠券分箱
+coupon_bins = [0, 10, 20, 30, 50]
+coupon_labels = ['0-10元', '10-20元', '20-30元', '30-50元']
+df['优惠券区间'] = pd.cut(df['优惠券金额'], bins=coupon_bins, labels=coupon_labels)
+
+abandon_rate_by_coupon = df.groupby('优惠券区间', observed=True)['是否弃购'].mean()
+
+print("\\n各优惠券区间的弃购率：")
+for coupon_range, rate in abandon_rate_by_coupon.items():
+    print(f"  {coupon_range}: {rate:.2%}")
+print()
+
+# 交叉分析：运费 × 优惠券
+cross_analysis = df.groupby(['运费区间', '优惠券区间'], observed=True)['是否弃购'].agg(['mean', 'count'])
+cross_analysis.columns = ['弃购率', '订单数']
+cross_analysis = cross_analysis[cross_analysis['订单数'] >= 10]  # 过滤样本少的
+
+print("运费 × 优惠券 交叉分析（样本数>=10）：")
+print(cross_analysis.sort_values('弃购率', ascending=False).head(10).round(4))
+print()
+
+# 识别高弃购原因
+print("=" * 50)
+print("弃购原因归因结论")
+print("=" * 50)
+max_abandon_freight = abandon_rate_by_freight.idxmax()
+max_abandon_coupon = abandon_rate_by_coupon.idxmax()
+print(f"1. 最高弃购率运费区间: {max_abandon_freight} ({abandon_rate_by_freight[max_abandon_freight]:.2%})")
+print(f"2. 最高弃购率优惠券区间: {max_abandon_coupon} ({abandon_rate_by_coupon[max_abandon_coupon]:.2%})")
+print(f"3. 建议: 重点优化{labels.index(max_abandon_freight)}元运费区间的用户")
+print()
+
+# 验证
+assert len(abandon_group) > 0, "没有弃购用户"
+assert len(pay_group) > 0, "没有支付用户"
+print("✓ 弃购原因归因分析完成！")
+`,
+    tips: ['弃购率 = 弃购数 / 总订单数', 'pd.cut可以自动将连续变量分箱', '交叉分析可以发现组合因素的影响']
+  },
+  {
+    id: 'cart-project-10',
+    chapterId: 'chapter-32',
+    title: '聚类后不同群体的购物车价格弹性测试',
+    description: '计算每群用户的平均折扣率，验证高价值用户是否对折扣更不敏感（弹性低）。',
+    difficulty: '进阶',
+    skills: ['价格弹性', '用户分群', '折扣分析', '价值验证'],
+    initialCode: `import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+# 创建模拟用户购物车数据
+np.random.seed(42)
+n_users = 200
+
+# 生成用户特征
+data = []
+for user_id in range(1, n_users+1):
+    # 生成历史购物车数据
+    n_carts = np.random.randint(3, 15)
+    
+    total_original_price = 0
+    total_actual_price = 0
+    
+    for _ in range(n_carts):
+        # 原价和实付价
+        original_price = np.random.uniform(100, 1000)
+        # 高价值用户折扣少，低价值用户折扣多
+        if user_id < 60:  # 高价值用户
+            discount = np.random.uniform(0.95, 1.0)  # 几乎不打折
+        elif user_id < 140:  # 中等价值用户
+            discount = np.random.uniform(0.8, 0.95)  # 9折左右
+        else:  # 低价值用户
+            discount = np.random.uniform(0.6, 0.8)  # 7-8折
+        
+        actual_price = original_price * discount
+        total_original_price += original_price
+        total_actual_price += actual_price
+    
+    data.append({
+        '用户ID': user_id,
+        '购物车数': n_carts,
+        '历史原价总额': total_original_price,
+        '历史实付总额': total_actual_price
+    })
+
+df = pd.DataFrame(data)
+
+# 计算折扣率
+df['折扣率'] = df['历史实付总额'] / df['历史原价总额']
+
+print("用户购物车数据（前10行）：")
+print(df.head(10))
+print()
+
+# 计算每群用户的平均折扣率
+def calculate_group_discount_rate(df_group):
+    """计算群组的平均折扣率"""
+    total_original = df_group['历史原价总额'].sum()
+    total_actual = df_group['历史实付总额'].sum()
+    return total_actual / total_original
+
+# 使用K-Means对用户进行分群
+features = ['购物车数', '历史原价总额']
+X = df[features]
+scaler = StandardScaler()
+scaled = scaler.fit_transform(X)
+
+kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
+df['cluster'] = kmeans.fit_predict(scaled)
+
+# 按簇计算统计信息
+cluster_stats = df.groupby('cluster').agg({
+    '用户ID': 'count',
+    '购物车数': 'mean',
+    '历史原价总额': 'mean',
+    '历史实付总额': 'mean'
+}).round(2)
+
+# 计算每个簇的平均折扣率
+cluster_stats['平均折扣率'] = cluster_stats.apply(
+    lambda row: row['历史实付总额'] / row['历史原价总额'], axis=1
+).round(4)
+
+# 为簇命名
+cluster_stats = cluster_stats.sort_values('平均折扣率', ascending=False)
+cluster_names = {}
+for rank, cluster_id in enumerate(cluster_stats.index):
+    if rank == 0:
+        cluster_names[cluster_id] = '低折扣用户（高价值）'
+    elif rank == 1:
+        cluster_names[cluster_id] = '中等折扣用户'
+    else:
+        cluster_names[cluster_id] = '高折扣用户（价格敏感）'
+
+df['用户群'] = df['cluster'].map(cluster_names)
+cluster_stats['用户群名称'] = cluster_stats.index.map(cluster_names)
+
+print("用户群特征分析：")
+print(cluster_stats[['用户群名称', '用户ID', '购物车数', '平均折扣率']].rename(
+    columns={'用户ID': '用户数', '购物车数': '平均购物车数'}
+))
+print()
+
+# 验证：高价值用户是否对折扣更不敏感
+group_discount_rates = df.groupby('用户群')['折扣率'].mean().sort_values(ascending=False)
+
+print("各用户群平均折扣率排名：")
+for group, rate in group_discount_rates.items():
+    print(f"  {group}: {rate:.2%}")
+
+print()
+
+# 计算价格敏感度
+df['价格敏感'] = df['折扣率'].apply(
+    lambda x: '高敏感' if x < 0.8 else ('中敏感' if x < 0.9 else '低敏感')
+)
+
+sensitivity_stats = df.groupby('价格敏感').agg({
+    '用户ID': 'count',
+    '折扣率': 'mean'
+}).round(4)
+sensitivity_stats.columns = ['用户数', '平均折扣率']
+
+print("价格敏感度分布：")
+print(sensitivity_stats.sort_values('平均折扣率'))
+print()
+
+# 验证假设
+high_value_group = group_discount_rates.index[0]  # 折扣率最高的群
+high_value_users = df[df['用户群'] == high_value_group]
+other_users = df[df['用户群'] != high_value_group]
+
+print("=" * 50)
+print("价格弹性假设验证")
+print("=" * 50)
+print(f"高价值用户组: {high_value_group}")
+print(f"  平均折扣率: {high_value_users['折扣率'].mean():.2%}")
+print(f"  平均购物车数: {high_value_users['购物车数'].mean():.1f}")
+print()
+print(f"其他用户组:")
+print(f"  平均折扣率: {other_users['折扣率'].mean():.2%}")
+print(f"  平均购物车数: {other_users['购物车数'].mean():.1f}")
+print()
+
+# 结论
+if high_value_users['折扣率'].mean() > other_users['折扣率'].mean():
+    print("✓ 验证通过：高价值用户确实对折扣更不敏感（弹性低）")
+    print("  建议：减少对高价值用户的折扣投入，转向价格敏感用户")
+else:
+    print("⚠️ 验证失败：数据显示相反趋势，需要进一步分析")
+
+# 验证
+assert len(set(df['cluster'])) == 3, "聚类数量不正确"
+assert df['折扣率'].mean() > 0, "折扣率计算错误"
+print("\\n✓ 价格弹性测试完成！")
+`,
+    tips: ['折扣率 = 实付金额 / 原价金额', '折扣率越高说明打折越少（价格不敏感）', '可以用回归分析量化价格弹性系数']
   }
 ];
 

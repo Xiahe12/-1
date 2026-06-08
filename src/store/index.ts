@@ -353,6 +353,106 @@ const mockChapters: Chapter[] = [
     studyDurationMinutes: 240,
     keyPoints: ['报告生成', '结果保存', '可视化', '端到端'],
     hasCodePractice: true
+  },
+  {
+    id: 'chapter-23',
+    courseId: 'course-2',
+    title: '项目1：用户购物车弃购原因清洗与统计',
+    content: '处理订单表中的时间列格式、缺失支付时间标记弃购，计算弃购率、平均放弃购物车价值。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['弃购率计算', '缺失值处理', '数据清洗', '统计对比'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-24',
+    courseId: 'course-2',
+    title: '项目2：购物车关联规则挖掘准备（支持→置信度计算）',
+    content: '按交易ID聚合为购物篮格式，计算{牛奶}→{面包}的支持度、置信度。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['购物篮格式', '关联规则', '支持度', '置信度'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-25',
+    courseId: 'course-2',
+    title: '项目3：RFM用户价值分层（不使用现成库）',
+    content: '计算R（最近消费天数）、F（频次）、M（总金额），将用户按百分位数分为高中低三档。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['RFM模型', '用户分层', '百分位数', '价值评估'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-26',
+    courseId: 'course-2',
+    title: '项目4：K-Means用户分群（基于消费行为）',
+    content: '使用sklearn.cluster.KMeans进行用户分群，分析不同簇的购物车商品类目偏好。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['K-Means聚类', '特征工程', '标准化', '消费行为分析'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-27',
+    courseId: 'course-2',
+    title: '项目5：购物车加购→支付转化漏斗分析',
+    content: '按session计算加购→支付转化率，识别高加购但低支付的商品。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['转化漏斗', 'Session分析', '支付转化率', '商品分析'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-28',
+    courseId: 'course-2',
+    title: '项目6：异常购物车行为检测（孤立森林）',
+    content: '使用sklearn.ensemble.IsolationForest标记异常购物车（刷单/测试单），输出异常购物车的典型特征。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['异常检测', 'IsolationForest', '刷单识别', '行为分析'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-29',
+    courseId: 'course-2',
+    title: '项目7：时序购物车趋势预测（移动平均/指数平滑）',
+    content: '使用pandas.rolling计算7日均线，识别周末效应及促销日峰值。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['时间序列', '移动平均', '趋势预测', '周末效应'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-30',
+    courseId: 'course-2',
+    title: '项目8：基于购物车内容的交叉销售推荐验证',
+    content: '构建共现矩阵，对给定商品推荐最常一起加购的商品配件。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['交叉销售', '共现矩阵', '推荐系统', '商品关联'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-31',
+    courseId: 'course-2',
+    title: '项目9：购物车放弃原因归因（决策树/分组均值对比）',
+    content: '分组对比弃购/支付用户的平均运费和优惠券金额，使用pandas.cut计算各箱弃购率。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['归因分析', '决策树', '弃购分析', '价格敏感度'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-32',
+    courseId: 'course-2',
+    title: '项目10：聚类后不同群体的购物车价格弹性测试',
+    content: '计算每群用户的平均折扣率，验证高价值用户是否对折扣更不敏感（弹性低）。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['价格弹性', '用户分群', '折扣分析', '价值验证'],
+    hasCodePractice: true
   }
 ];
 
