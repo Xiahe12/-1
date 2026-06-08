@@ -11,6 +11,18 @@ export default function CourseDetail() {
   const course = useAppStore((state) => state.courses.find((c) => c.id === id))
   const chapters = useAppStore((state) => state.chapters.filter((c) => c.courseId === id))
   const completedChapters = chapters.filter((c) => c.isCompleted).length
+  const firstIncompleteChapter = chapters.find((c) => !c.isCompleted)
+  
+  const handleContinueLearning = () => {
+    if (firstIncompleteChapter?.hasCodePractice) {
+      navigate(`/practice/${firstIncompleteChapter.id}`)
+    } else if (firstIncompleteChapter) {
+      const element = document.getElementById(firstIncompleteChapter.id)
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' })
+      }
+    }
+  }
 
   if (!course) {
     return (
@@ -56,7 +68,10 @@ export default function CourseDetail() {
             </div>
 
             <div className="flex flex-wrap gap-3 sm:gap-4">
-              <button className="px-5 sm:px-8 py-2.5 sm:py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:shadow-lg hover:scale-[1.02] transition-all duration-200 font-semibold text-sm sm:text-lg flex items-center gap-2">
+              <button 
+                onClick={handleContinueLearning}
+                className="px-5 sm:px-8 py-2.5 sm:py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl hover:shadow-lg hover:scale-[1.02] transition-all duration-200 font-semibold text-sm sm:text-lg flex items-center gap-2"
+              >
                 <PlayCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                 {course.progress === 100 ? '重新学习' : '继续学习'}
               </button>

@@ -62,6 +62,7 @@ export default function ChapterList({ chapters }: ChapterListProps) {
       {chapters.map((chapter, index) => (
         <div 
           key={chapter.id} 
+          id={chapter.id}
           className={`bg-emerald-50 rounded-2xl overflow-hidden transition-all duration-300 animate-fade-in-up ${
             animatingChapterId === chapter.id ? 'ring-2 ring-emerald-400 ring-offset-2' : ''
           }`}
