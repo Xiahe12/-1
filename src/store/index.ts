@@ -653,6 +653,106 @@ const mockChapters: Chapter[] = [
     studyDurationMinutes: 240,
     keyPoints: ['预测性补货', '安全库存', '成本优化'],
     hasCodePractice: true
+  },
+  {
+    id: 'chapter-53',
+    courseId: 'course-6',
+    title: '项目1：销售数据清洗与基础BI看板',
+    content: 'Pandas数据清洗、缺失值/异常值处理、数据类型转换、基础统计透视。给定零售订单CSV（含订单ID、日期、金额、数量、区域），完成去重、格式统一、缺失填补；计算月销售额、各区域总销售；输出销售趋势折线图与区域柱状图。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['数据清洗', '缺失值处理', '统计透视', '数据可视化'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-54',
+    courseId: 'course-6',
+    title: '项目2：电商订单流与购物车分析（关联规则Apriori）',
+    content: '购物篮分析、事务编码、频繁项集、关联规则（置信度/支持度）。数据含Transaction_ID与Product。清洗掉单件商品订单；转换为购物车矩阵；使用mlxtend.frequent_patterns计算频繁项集与规则（如{牛奶}→{面包}）。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['购物篮分析', 'Apriori算法', '关联规则', '推荐系统'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-55',
+    courseId: 'course-6',
+    title: '项目3：RFM客户分层分析（传统BI指标）',
+    content: '聚合函数、时间差计算、分位数、客户评分。根据订单表（客户ID、日期、金额）计算最近购买日(R)、频次(F)、金额(M)；利用分位数划分1-5分；组合RFM总分；划分高价值/流失客户。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['RFM模型', '客户分群', '分位数计算', '业务洞察'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-56',
+    courseId: 'course-6',
+    title: '项目4：用户行为路径聚类（KMeans）',
+    content: '聚类分析、特征标准化、肘部法则、聚类结果解读。用户数据包含：浏览时长、点击次数、加入购物车次数、下单量。清洗异常值后标准化，使用KMeans聚类（选最佳K值）；为每个用户打标，并可视化聚类中心雷达图。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['KMeans聚类', '用户画像', '特征工程', '可视化'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-57',
+    courseId: 'course-6',
+    title: '项目5：退货原因文本聚类（非结构化→结构化）',
+    content: '文本清洗、TF-IDF、KMeans文本聚类、词云。退货评论列含短文本；分词、去停用词，转换为TF-IDF矩阵；聚类（3~5类）；每类提取高频词，分析主要退货原因（如物流、质量等）。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['文本挖掘', 'TF-IDF', '文本聚类', '词云可视化'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-58',
+    courseId: 'course-6',
+    title: '项目6：销量预测特征工程与基线模型',
+    content: '时序聚合、特征构造、滞后特征、滚动统计。日销售数据，构造星期、月份、节假日特征；过去7天滚动均值/销量滞后1~7；使用线性回归或决策树预测次日销量；评估RMSE。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['时间序列', '特征工程', '机器学习', '预测评估'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-59',
+    courseId: 'course-6',
+    title: '项目7：商品价格敏感度聚类分析（价格带偏好）',
+    content: '二维聚类（价格vs销量占比）、数据分箱与聚合。商品交易明细（商品ID、单价、购买数量）。计算每个商品的平均单价与总销量；标准化后KMeans聚类（如：低价格高销量、高价格低销量、中价格中庸等）。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['价格分析', '二维聚类', 'KMeans', '业务策略'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-60',
+    courseId: 'course-6',
+    title: '项目8：动态购物车智能推荐模拟（协同过滤+关联规则对比）',
+    content: '用户-商品矩阵、基于项目的协同过滤（余弦相似度）、关联规则对比。使用用户购买历史（用户-商品二值矩阵）。若用户加入商品A，基于相似商品推荐Top3。同时与关联规则推荐结果对比（同一购物车）。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['协同过滤', '推荐系统', '关联规则', '算法对比'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-61',
+    courseId: 'course-6',
+    title: '项目9：异常交易检测（孤立森林+统计方法）',
+    content: '异常检测、Z-score、孤立森林、多维特征。订单数据含金额、数量、折扣、用户注册时长等；使用Z-score与孤立森林标记异常订单（金额极高、折扣极高等）；分析异常类型（欺诈？团购？）。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['异常检测', '孤立森林', 'Z-score', '多维分析'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-62',
+    courseId: 'course-6',
+    title: '项目10：端到端BI仪表盘项目（综合任务）',
+    content: '数据整合+购物车分析+RFM+聚类+可视化。给定多表数据（用户、订单、商品），完成全流程数据分析并构建BI报告。',
+    isCompleted: false,
+    studyDurationMinutes: 240,
+    keyPoints: ['综合项目', 'BI报告', '端到端分析', '数据整合'],
+    hasCodePractice: true
   }
 ];
 
