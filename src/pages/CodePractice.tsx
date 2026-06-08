@@ -621,6 +621,965 @@ print("3. 聚类识别出沉睡高价值用户群，建议作为AI定向广告�
 print("4. 价格带共现分析为AI捆绑推荐模型提供了特征输入")
 `,
     tips: ['综合实战是检验学习成果的最好方式', '实际项目中需要更多的数据清洗', '分析结果要转化为可执行的业务建议']
+  },
+  {
+    id: 'db-project-1',
+    chapterId: 'chapter-13',
+    title: '数据库连接与数据抽取（SQL + Pandas）',
+    description: '从数据库中提取销售数据，为分析做准备。使用 SQLite 创建订单表、订单明细表、商品表，使用 pandas.read_sql 读取数据。',
+    difficulty: '基础',
+    skills: ['SQLite', 'SQL', 'pandas.read_sql', '数据验证'],
+    initialCode: `import sqlite3
+import pandas as pd
+import numpy as np
+
+# 创建数据库连接
+conn = sqlite3.connect("sales.db")
+cursor = conn.cursor()
+
+# 创建订单表
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS orders (
+        order_id INTEGER PRIMARY KEY,
+        user_id INTEGER,
+        order_date TEXT,
+        total_amount REAL
+    )
+""")
+
+# 创建订单明细表
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS order_items (
+        item_id INTEGER PRIMARY KEY,
+        order_id INTEGER,
+        product_id INTEGER,
+        quantity INTEGER,
+        price REAL,
+        FOREIGN KEY (order_id) REFERENCES orders(order_id)
+    )
+""")
+
+# 创建商品表
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS products (
+        product_id INTEGER PRIMARY KEY,
+        product_name TEXT,
+        category TEXT,
+        price REAL
+    )
+""")
+
+# 插入模拟数据
+np.random.seed(42)
+
+# 商品数据
+products = [
+    (1, '牛奶', '食品', 5.5),
+    (2, '面包', '食品', 3.0),
+    (3, '手机壳', '数码', 20.0),
+    (4, '钢化膜', '数码', 15.0),
+    (5, '洗发水', '日用品', 25.0)
+]
+cursor.executemany("INSERT OR REPLACE INTO products VALUES (?, ?, ?, ?)", products)
+
+# 订单数据
+orders = []
+order_items = []
+for i in range(1, 51):
+    user_id = np.random.randint(1, 11)
+    order_date = f'2024-01-{np.random.randint(1, 29):02d}'
+    total_amount = 0
+    
+    num_items = np.random.randint(1, 4)
+    for j in range(num_items):
+        product_id = np.random.randint(1, 6)
+        quantity = np.random.randint(1, 4)
+        price = products[product_id-1][3]
+        total_amount += price * quantity
+        order_items.append((len(order_items) + 1, i, product_id, quantity, price))
+    
+    orders.append((i, user_id, order_date, total_amount))
+
+cursor.executemany("INSERT OR REPLACE INTO orders VALUES (?, ?, ?, ?)", orders)
+cursor.executemany("INSERT OR REPLACE INTO order_items VALUES (?, ?, ?, ?, ?)", order_items)
+conn.commit()
+
+print("数据库创建成功！")
+print()
+
+# 使用 pandas.read_sql 读取数据
+df_orders = pd.read_sql("SELECT * FROM orders", conn)
+df_order_items = pd.read_sql("SELECT * FROM order_items", conn)
+df_products = pd.read_sql("SELECT * FROM products", conn)
+
+print("订单表前5行：")
+print(df_orders.head())
+print()
+
+print("订单明细表前5行：")
+print(df_order_items.head())
+print()
+
+print("商品表：")
+print(df_products)
+print()
+
+# 验证数据
+assert len(df_orders) > 0, "数据抽取失败"
+assert len(df_order_items) > 0, "订单明细数据抽取失败"
+assert len(df_products) > 0, "商品数据抽取失败"
+
+print("✓ 数据验证通过！")
+print(f"订单数: {len(df_orders)}")
+print(f"订单明细数: {len(df_order_items)}")
+print(f"商品数: {len(df_products)}")
+
+conn.close()
+`,
+    tips: ['SQLite 是轻量级数据库，无需安装服务', 'pandas.read_sql 可以直接读取 SQL 查询结果', '记得关闭数据库连接']
+  },
+  {
+    id: 'db-project-2',
+    chapterId: 'chapter-14',
+    title: '数据清洗与缺失值处理',
+    description: '掌握真实数据中的缺失值、异常值处理。构造含缺失值的订单表，使用 Pandas 进行删除空行、填充均值、标记缺失。',
+    difficulty: '基础',
+    skills: ['缺失值处理', '数据清洗', '统计对比', '异常值检测'],
+    initialCode: `import sqlite3
+import pandas as pd
+import numpy as np
+
+# 创建含缺失值的数据
+np.random.seed(42)
+n = 100
+
+data = {
+    'order_id': range(1, n+1),
+    'user_id': np.random.randint(1, 11, n),
+    'amount': np.random.normal(100, 30, n).round(2),
+    'quantity': np.random.randint(1, 10, n)
+}
+
+df = pd.DataFrame(data)
+
+# 引入缺失值
+df.loc[np.random.choice(n, 15), 'amount'] = np.nan
+df.loc[np.random.choice(n, 10), 'user_id'] = np.nan
+
+# 引入异常值
+df.loc[np.random.choice(n, 5), 'amount'] = df['amount'] * 5
+
+print("原始数据统计：")
+print(df.describe())
+print()
+print(f"缺失值情况：")
+print(df.isnull().sum())
+print()
+
+# 创建副本进行清洗
+df_clean = df.copy()
+
+# 方法1：删除含有缺失值的行
+df_drop = df.dropna()
+print(f"删除缺失值后行数: {len(df_drop)} (原始: {len(df)})")
+print()
+
+# 方法2：填充均值
+df_clean['amount'] = df_clean['amount'].fillna(df_clean['amount'].mean())
+df_clean['user_id'] = df_clean['user_id'].fillna(-1)  # 用特殊值标记
+
+# 标记缺失
+df_clean['amount_missing'] = df['amount'].isnull()
+df_clean['user_id_missing'] = df['user_id'].isnull()
+
+# 处理异常值：截断在 3σ 范围内
+mean_amount = df_clean['amount'].mean()
+std_amount = df_clean['amount'].std()
+lower_bound = mean_amount - 3 * std_amount
+upper_bound = mean_amount + 3 * std_amount
+df_clean['amount'] = df_clean['amount'].clip(lower_bound, upper_bound)
+
+print("清洗后数据统计：")
+print(df_clean.describe())
+print()
+print(f"清洗后缺失值情况：")
+print(df_clean[['amount', 'user_id']].isnull().sum())
+print()
+
+# 验证
+assert df_clean["amount"].isnull().sum() == 0, "缺失值未处理"
+print("✓ 缺失值处理验证通过！")
+`,
+    tips: ['处理缺失值有三种方法：删除、填充、标记', '均值填充适合正态分布数据', '异常值可以用截断或 IQR 方法处理']
+  },
+  {
+    id: 'db-project-3',
+    chapterId: 'chapter-15',
+    title: '购物车分析（Market Basket Analysis）',
+    description: '使用关联规则挖掘。将订单明细转换为"购物篮"格式，计算支持度、置信度、提升度，找出强关联规则。',
+    difficulty: '进阶',
+    skills: ['关联规则', '购物篮分析', '支持度置信度', '提升度'],
+    initialCode: `import pandas as pd
+import numpy as np
+from itertools import combinations
+
+# 创建购物车数据
+np.random.seed(42)
+
+products = ['牛奶', '面包', '黄油', '手机壳', '钢化膜', '啤酒', '花生', '洗发水', '沐浴露']
+n_orders = 100
+
+transactions = []
+for i in range(n_orders):
+    # 随机选择商品
+    n_items = np.random.randint(1, 5)
+    items = np.random.choice(products, n_items, replace=False)
+    transactions.append({'order_id': i+1, 'items': ','.join(sorted(items))})
+
+df = pd.DataFrame(transactions)
+print("购物车数据前10行：")
+print(df.head(10))
+print()
+
+# 转换为 one-hot 编码
+one_hot = df['items'].str.get_dummies(sep=',')
+print("One-hot 编码数据前5行：")
+print(one_hot.head())
+print()
+
+# 计算单个商品的支持度
+support = one_hot.mean().sort_values(ascending=False)
+print("商品支持度（出现频率）：")
+print(support.round(4))
+print()
+
+# 计算商品对的共现（简化版关联规则）
+pair_support = {}
+total_orders = len(one_hot)
+
+for i, item1 in enumerate(one_hot.columns):
+    for item2 in one_hot.columns[i+1:]:
+        # 同时购买的订单数
+        both = ((one_hot[item1] == 1) & (one_hot[item2] == 1)).sum()
+        if both > 0:
+            pair_support[(item1, item2)] = both / total_orders
+
+# 计算置信度和提升度
+rules = []
+for (item_a, item_b), supp in sorted(pair_support.items(), key=lambda x: x[1], reverse=True):
+    conf_ab = supp / support[item_a]  # A→B 的置信度
+    conf_ba = supp / support[item_b]  # B→A 的置信度
+    lift = supp / (support[item_a] * support[item_b])  # 提升度
+    
+    rules.append({
+        'antecedent': item_a,
+        'consequent': item_b,
+        'support': supp,
+        'confidence': conf_ab,
+        'lift': lift
+    })
+
+rules_df = pd.DataFrame(rules)
+
+print("Top 10 关联规则（按提升度排序）：")
+print(rules_df.sort_values('lift', ascending=False).head(10).round(4))
+print()
+
+# 找出强关联规则（提升度 > 1.2）
+strong_rules = rules_df[rules_df['lift'] > 1.2]
+print(f"强关联规则（提升度 > 1.2）数量: {len(strong_rules)}")
+if len(strong_rules) > 0:
+    print("强关联规则：")
+    print(strong_rules[['antecedent', 'consequent', 'lift']].round(4))
+
+assert len(rules_df[rules_df["lift"] > 1]) > 0, "没有找到正相关规则"
+print("\\n✓ 关联规则分析完成！")
+`,
+    tips: ['提升度 > 1 表示正相关，< 1 表示负相关', '置信度表示购买A后购买B的概率', '支持度表示同时购买A和B的概率']
+  },
+  {
+    id: 'db-project-4',
+    chapterId: 'chapter-16',
+    title: '用户消费行为RFM分析',
+    description: '基于最近购买时间、频率、金额进行用户分层。计算每个用户的 R、F、M，对每个指标分箱，输出高价值用户名单。',
+    difficulty: '进阶',
+    skills: ['RFM模型', '用户分层', '分箱操作', '价值评估'],
+    initialCode: `import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+
+# 创建用户消费数据
+np.random.seed(42)
+n_users = 30
+reference_date = datetime(2024, 2, 1)
+
+data = []
+for user_id in range(1, n_users + 1):
+    n_purchases = np.random.randint(1, 15)
+    for i in range(n_purchases):
+        days_ago = np.random.randint(0, 60)
+        purchase_date = reference_date - timedelta(days=days_ago)
+        amount = np.random.normal(100, 30, 1)[0].round(2)
+        data.append({
+            'user_id': user_id,
+            'purchase_date': purchase_date,
+            'amount': max(amount, 10)  # 确保金额为正
+        })
+
+df = pd.DataFrame(data)
+print("消费数据前10行：")
+print(df.head(10))
+print()
+
+# 计算 RFM
+rfm = df.groupby('user_id').agg({
+    'purchase_date': lambda x: (reference_date - x.max()).days,  # Recency：最近一次购买距今天数
+    'amount': ['count', 'sum']  # Frequency：购买次数，Monetary：总金额
+}).round(2)
+
+rfm.columns = ['Recency', 'Frequency', 'Monetary']
+print("RFM原始值（前10用户）：")
+print(rfm.head(10))
+print()
+
+# RFM 打分 (1-5)
+# Recency: 越小越好，所以分位数反转
+rfm['R_score'] = pd.qcut(rfm['Recency'], q=5, labels=[5, 4, 3, 2, 1]).astype(int)
+# Frequency: 越大越好
+rfm['F_score'] = pd.qcut(rfm['Frequency'].rank(method='first'), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
+# Monetary: 越大越好
+rfm['M_score'] = pd.qcut(rfm['Monetary'].rank(method='first'), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
+
+# 计算总分
+rfm['RFM_Score'] = rfm['R_score'] + rfm['F_score'] + rfm['M_score']
+
+# 用户分层
+def classify_user(row):
+    total = row['RFM_Score']
+    if total >= 12:
+        return '重要价值客户'
+    elif total >= 9:
+        return '重要发展客户'
+    elif total >= 6:
+        return '一般客户'
+    else:
+        return '流失客户'
+
+rfm['segment'] = rfm.apply(classify_user, axis=1)
+
+print("RFM分析结果：")
+print(rfm[['Recency', 'Frequency', 'Monetary', 'RFM_Score', 'segment']].head(10))
+print()
+
+# 分层统计
+segment_stats = rfm.groupby('segment').agg({
+    'Recency': 'mean',
+    'Frequency': 'mean',
+    'Monetary': ['mean', 'count', 'sum']
+}).round(2)
+segment_stats.columns = ['平均最近天数', '平均购买次数', '平均消费金额', '用户数', '总消费金额']
+print("用户分层统计：")
+print(segment_stats)
+print()
+
+# 高价值用户
+high_value = rfm[rfm['RFM_Score'] >= 12]
+print(f"高价值用户（RFM_Score >= 12）: {len(high_value)} 人")
+print(high_value[['RFM_Score', 'segment']])
+
+assert len(high_value) > 0, "没有找到高价值用户"
+print("\\n✓ RFM分析完成！")
+`,
+    tips: ['R: 最近一次购买（越小越好）', 'F: 购买频率（越大越好）', 'M: 消费金额（越大越好）']
+  },
+  {
+    id: 'db-project-5',
+    chapterId: 'chapter-17',
+    title: '时间序列分析与趋势预测',
+    description: '分析销售额随时间变化，使用简单预测模型。将订单数据按日/月聚合，使用 Pandas 重采样与滚动平均。',
+    difficulty: '进阶',
+    skills: ['时间序列', '重采样', '滚动平均', '趋势预测'],
+    initialCode: `import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+
+# 创建时间序列数据
+np.random.seed(42)
+start_date = datetime(2024, 1, 1)
+end_date = datetime(2024, 6, 30)
+dates = pd.date_range(start_date, end_date, freq='D')
+
+# 构造有趋势和季节性的数据
+n_days = len(dates)
+trend = np.linspace(100, 150, n_days)  # 上升趋势
+seasonal = 20 * np.sin(2 * np.pi * np.arange(n_days) / 7)  # 周周期
+monthly_effect = np.where(pd.Series(dates).dt.day <= 5, 30, 0)  # 月初效应
+noise = np.random.normal(0, 10, n_days)
+sales = trend + seasonal + monthly_effect + noise
+sales = np.maximum(sales, 50)  # 确保不为负
+
+df = pd.DataFrame({'date': dates, 'sales': sales.round(2)})
+df.set_index('date', inplace=True)
+
+print("时间序列数据前10天：")
+print(df.head(10))
+print()
+
+# 重采样：按月聚合
+monthly_sales = df.resample('M').sum()
+print("月度销售数据：")
+print(monthly_sales)
+print()
+
+# 滚动平均
+df['MA_7'] = df['sales'].rolling(window=7, center=True).mean()
+df['MA_30'] = df['sales'].rolling(window=30, center=True).mean()
+
+print("统计摘要：")
+print(df[['sales', 'MA_7', 'MA_30']].describe().round(2))
+print()
+
+# 简单线性回归预测（趋势线）
+from sklearn.linear_model import LinearRegression
+
+# 准备数据
+df['day_num'] = np.arange(len(df))
+X = df[['day_num']].dropna()
+y = df['sales'].loc[X.index]
+
+# 拟合模型
+model = LinearRegression()
+model.fit(X, y)
+df['trend'] = model.predict(df[['day_num']])
+
+r2 = model.score(X, y)
+print(f"趋势线拟合 R² = {r2:.4f}")
+print(f"模型系数: 每天增长 {model.coef_[0]:.4f}")
+print()
+
+# 验证模型有一定解释力
+assert r2 > 0.3, "模型解释力不足"
+print("✓ 时间序列分析完成！")
+print()
+print("提示：完整的季节性分解可以使用 statsmodels.tsa.seasonal.seasonal_decompose")
+`,
+    tips: ['滚动平均可以平滑短期波动，看清长期趋势', '重采样可以将数据从日转为周/月', 'R² 表示模型能解释多少数据方差']
+  },
+  {
+    id: 'db-project-6',
+    chapterId: 'chapter-18',
+    title: '用户聚类分析（KMeans）',
+    description: '基于消费行为将用户分群。选取特征：总消费额、平均客单价、购买品类数，标准化后使用 KMeans 聚类。',
+    difficulty: '进阶',
+    skills: ['K-Means聚类', '特征工程', '标准化', '可视化'],
+    initialCode: `import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+# 创建用户特征数据
+np.random.seed(42)
+n_users = 100
+
+# 构造有聚类结构的数据
+user_data = []
+for i in range(n_users):
+    if i < 30:
+        # 群体1：高消费、低频次
+        total = np.random.normal(5000, 1000)
+        avg_order = np.random.normal(500, 100)
+        categories = np.random.randint(2, 5)
+    elif i < 70:
+        # 群体2：中等消费、中频次
+        total = np.random.normal(2000, 500)
+        avg_order = np.random.normal(200, 50)
+        categories = np.random.randint(3, 7)
+    else:
+        # 群体3：低消费、高频次
+        total = np.random.normal(800, 200)
+        avg_order = np.random.normal(80, 20)
+        categories = np.random.randint(5, 10)
+    
+    user_data.append({
+        'user_id': i + 1,
+        'total_spent': max(total, 100),
+        'avg_order_value': max(avg_order, 30),
+        'num_categories': categories
+    })
+
+df = pd.DataFrame(user_data)
+print("用户特征数据前10行：")
+print(df.head(10))
+print()
+
+# 选取特征
+features = ['total_spent', 'avg_order_value', 'num_categories']
+X = df[features]
+
+# 标准化
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# K-Means 聚类
+kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
+df['cluster'] = kmeans.fit_predict(X_scaled)
+
+print("聚类结果统计：")
+cluster_stats = df.groupby('cluster').agg({
+    'total_spent': ['mean', 'count'],
+    'avg_order_value': 'mean',
+    'num_categories': 'mean'
+}).round(2)
+cluster_stats.columns = ['平均总消费', '用户数', '平均客单价', '平均品类数']
+print(cluster_stats)
+print()
+
+# 为每个群体命名
+def name_cluster(row):
+    if row['cluster'] == 0:
+        return '高价值客户'
+    elif row['cluster'] == 1:
+        return '大众客户'
+    else:
+        return '潜力客户'
+
+df['cluster_name'] = df.apply(name_cluster, axis=1)
+
+print("各群体用户数：")
+print(df['cluster_name'].value_counts())
+print()
+
+# 验证聚类数量
+assert len(set(df['cluster'])) == 3, "聚类数量不正确"
+print("✓ 用户聚类分析完成！")
+print()
+print("提示：可以用 PCA 降维后可视化聚类结果")
+`,
+    tips: ['K-Means 需要先标准化特征', '可以用肘部法则确定最佳 k 值', '聚类后要为每个群体赋予业务含义']
+  },
+  {
+    id: 'db-project-7',
+    chapterId: 'chapter-19',
+    title: '商品价格敏感度分析（价格弹性）',
+    description: '分析价格变化对销量的影响。计算不同价格区间的平均销量，拟合对数线性模型估计价格弹性系数。',
+    difficulty: '进阶',
+    skills: ['价格弹性', '销量分析', '对数模型', '敏感度评估'],
+    initialCode: `import pandas as pd
+import numpy as np
+
+# 创建商品价格和销量数据
+np.random.seed(42)
+
+products = ['商品A', '商品B', '商品C', '商品D', '商品E']
+data = []
+
+for product in products:
+    # 为每个商品生成多期价格和销量数据
+    base_price = np.random.choice([50, 100, 200, 500, 1000])
+    for period in range(1, 13):
+        # 价格在基础价格±20%波动
+        price = base_price * (1 + np.random.uniform(-0.2, 0.2))
+        # 销量与价格负相关，加上随机噪声
+        base_quantity = 1000 / price * 10
+        quantity = base_quantity * (1 + np.random.normal(-0.5 * (price - base_price)/base_price, 0.1))
+        quantity = max(int(quantity), 10)
+        
+        data.append({
+            'product': product,
+            'period': period,
+            'price': round(price, 2),
+            'quantity': quantity
+        })
+
+df = pd.DataFrame(data)
+print("价格销量数据前15行：")
+print(df.head(15))
+print()
+
+# 计算价格弹性
+elasticities = []
+
+for product in products:
+    product_data = df[df['product'] == product].copy()
+    
+    if len(product_data) >= 2:
+        # 计算价格变化率和销量变化率
+        product_data['price_change'] = product_data['price'].pct_change()
+        product_data['quantity_change'] = product_data['quantity'].pct_change()
+        
+        # 计算弹性（销量变化% / 价格变化%）
+        valid_data = product_data.dropna()
+        if len(valid_data) > 0:
+            elasticity = (valid_data['quantity_change'] / valid_data['price_change']).mean()
+            elasticities.append({
+                'product': product,
+                'price_elasticity': round(elasticity, 4),
+                'avg_price': round(product_data['price'].mean(), 2),
+                'avg_quantity': round(product_data['quantity'].mean(), 2)
+            })
+
+elasticity_df = pd.DataFrame(elasticities)
+print("各商品价格弹性：")
+print(elasticity_df)
+print()
+
+# 找出高敏感商品（|elasticity| > 1）
+high_sensitivity = elasticity_df[abs(elasticity_df['price_elasticity']) > 1]
+print(f"高价格敏感商品（|弹性| > 1）: {len(high_sensitivity)} 个")
+if len(high_sensitivity) > 0:
+    print(high_sensitivity[['product', 'price_elasticity']])
+
+# 验证
+assert not elasticity_df['price_elasticity'].isna().all(), "未能计算价格弹性"
+print("\\n✓ 价格敏感度分析完成！")
+print()
+print("提示：|弹性| > 1 表示价格变动对销量影响大（富有弹性）")
+print("提示：|弹性| < 1 表示价格变动对销量影响小（缺乏弹性）")
+`,
+    tips: ['价格弹性 = 销量变化% / 价格变化%', '弹性绝对值 > 1: 富有弹性（价格敏感）', '弹性绝对值 < 1: 缺乏弹性（价格不敏感）']
+  },
+  {
+    id: 'db-project-8',
+    chapterId: 'chapter-20',
+    title: '实时数据流模拟与滑动窗口聚合',
+    description: '模拟AI场景下的流式数据处理。使用 pandas 模拟订单事件，计算过去1分钟的销售额滑动平均，检测异常峰值。',
+    difficulty: '进阶',
+    skills: ['流式数据', '滑动窗口', '异常检测', '实时聚合'],
+    initialCode: `import pandas as pd
+import numpy as np
+from collections import deque
+import time
+
+# 模拟实时数据流
+np.random.seed(42)
+
+# 生成历史数据
+n_history = 100
+timestamps = pd.date_range(end=pd.Timestamp.now(), periods=n_history, freq='5S')
+base_sales = 100
+sales = base_sales + np.random.normal(0, 20, n_history)
+
+# 引入几个异常峰值
+sales[20] = base_sales * 3
+sales[50] = base_sales * 2.5
+sales[80] = base_sales * 4
+
+stream_data = pd.DataFrame({
+    'timestamp': timestamps,
+    'sales': sales.round(2)
+})
+
+print("模拟流数据前10条：")
+print(stream_data.head(10))
+print()
+
+# 滑动窗口聚合（窗口大小 = 12 * 5秒 = 1分钟）
+window_size = 12
+stream_data['rolling_mean'] = stream_data['sales'].rolling(window=window_size).mean()
+stream_data['rolling_std'] = stream_data['sales'].rolling(window=window_size).std()
+
+# 异常检测：超过均值 + 3倍标准差
+stream_data['is_anomaly'] = (
+    stream_data['sales'] > 
+    stream_data['rolling_mean'] + 3 * stream_data['rolling_std']
+)
+
+print("滑动窗口统计（后15条）：")
+print(stream_data[['timestamp', 'sales', 'rolling_mean', 'is_anomaly']].tail(15))
+print()
+
+# 统计结果
+total_events = len(stream_data)
+anomaly_count = stream_data['is_anomaly'].sum()
+print(f"总事件数: {total_events}")
+print(f"检测到异常: {anomaly_count} 个")
+print()
+
+# 使用 deque 实现流式处理（在线版本）
+print("模拟在线流式处理（前20个事件）：")
+window = deque(maxlen=window_size)
+
+for i, (_, row) in enumerate(stream_data.head(20).iterrows()):
+    window.append(row['sales'])
+    
+    if len(window) == window_size:
+        mean_val = np.mean(window)
+        std_val = np.std(window)
+        is_anomaly = row['sales'] > mean_val + 3 * std_val
+        
+        status = "⚠️ 异常" if is_anomaly else "✓ 正常"
+        print(f"时间 {i+1:2d}: 销售额={row['sales']:6.2f}, 均值={mean_val:6.2f}, {status}")
+    
+    time.sleep(0.05)  # 模拟延迟
+
+# 验证滑动窗口长度
+assert len(stream_data['rolling_mean'].dropna()) == len(stream_data) - window_size + 1, "滑动窗口计算错误"
+print("\\n✓ 实时流数据分析完成！")
+`,
+    tips: ['滑动窗口可以只保留最近N个数据点', '异常检测常用 3σ 原则', 'deque 的 maxlen 可以自动丢弃旧数据']
+  },
+  {
+    id: 'db-project-9',
+    chapterId: 'chapter-21',
+    title: '多表关联与特征工程',
+    description: '为机器学习模型构建特征表。关联订单表、用户表、商品表、评价表，构造特征：用户历史好评率、商品被购买时段分布。',
+    difficulty: '进阶',
+    skills: ['多表关联', '特征工程', '评价分析', '特征矩阵'],
+    initialCode: `import sqlite3
+import pandas as pd
+import numpy as np
+from datetime import datetime
+
+# 创建数据库和表
+conn = sqlite3.connect(":memory:")
+
+# 用户表
+users = pd.DataFrame({
+    'user_id': range(1, 21),
+    'age': np.random.randint(18, 60, 20),
+    'gender': np.random.choice(['M', 'F'], 20),
+    'register_date': pd.date_range('2023-01-01', periods=20)
+})
+users.to_sql('users', conn, index=False, if_exists='replace')
+
+# 商品表
+products = pd.DataFrame({
+    'product_id': range(1, 11),
+    'product_name': [f'商品{i}' for i in range(1, 11)],
+    'category': np.random.choice(['食品', '数码', '服装', '日用品'], 10),
+    'price': np.random.uniform(10, 500, 10).round(2)
+})
+products.to_sql('products', conn, index=False, if_exists='replace')
+
+# 订单表
+n_orders = 100
+orders = pd.DataFrame({
+    'order_id': range(1, n_orders + 1),
+    'user_id': np.random.randint(1, 21, n_orders),
+    'product_id': np.random.randint(1, 11, n_orders),
+    'order_time': pd.date_range('2024-01-01', periods=n_orders, freq='2H'),
+    'quantity': np.random.randint(1, 5, n_orders)
+})
+orders.to_sql('orders', conn, index=False, if_exists='replace')
+
+# 评价表
+reviews = pd.DataFrame({
+    'review_id': range(1, n_orders + 1),
+    'order_id': range(1, n_orders + 1),
+    'user_id': orders['user_id'],
+    'product_id': orders['product_id'],
+    'rating': np.random.randint(1, 6, n_orders),  # 1-5星
+    'review_text': np.random.choice(['很好', '不错', '一般', '差'], n_orders)
+})
+reviews.to_sql('reviews', conn, index=False, if_exists='replace')
+
+print("数据库表创建完成！")
+print()
+
+# SQL多表关联
+query = """
+SELECT 
+    u.user_id,
+    u.age,
+    u.gender,
+    o.order_id,
+    o.order_time,
+    o.quantity,
+    p.product_id,
+    p.product_name,
+    p.category,
+    p.price,
+    r.rating
+FROM users u
+JOIN orders o ON u.user_id = o.user_id
+JOIN products p ON o.product_id = p.product_id
+LEFT JOIN reviews r ON o.order_id = r.order_id
+"""
+df_full = pd.read_sql(query, conn)
+print("关联后的数据前10行：")
+print(df_full.head(10))
+print()
+
+# 特征工程：用户特征
+user_features = df_full.groupby('user_id').agg({
+    'order_id': 'count',  # 订单数
+    'price': ['sum', 'mean'],  # 总消费、平均消费
+    'rating': 'mean',  # 平均评分
+    'category': 'nunique'  # 购买品类数
+}).round(2)
+user_features.columns = ['total_orders', 'total_spent', 'avg_order_value', 'avg_rating', 'num_categories']
+
+# 用户好评率
+user_features['good_review_rate'] = (
+    df_full[df_full['rating'] >= 4].groupby('user_id').size() / 
+    user_features['total_orders']
+).round(4).fillna(0)
+
+print("用户特征：")
+print(user_features.head(10))
+print()
+
+# 商品特征
+product_features = df_full.groupby('product_id').agg({
+    'quantity': 'sum',
+    'price': 'first',
+    'rating': 'mean',
+    'order_id': 'count'
+}).round(2)
+product_features.columns = ['total_sold', 'price', 'avg_rating', 'order_count']
+
+print("商品特征：")
+print(product_features.head(10))
+print()
+
+# 输出可用于聚类的特征矩阵
+feature_matrix = user_features[['total_orders', 'total_spent', 'avg_rating', 'num_categories']].fillna(0)
+
+print("特征矩阵形状：", feature_matrix.shape)
+print("特征矩阵前5行：")
+print(feature_matrix.head())
+
+assert feature_matrix.shape[1] >= 5 or feature_matrix.shape[1] >= 4, "特征数量不足"
+print("\\n✓ 多表关联与特征工程完成！")
+`,
+    tips: ['LEFT JOIN 可以保留左表所有记录', '特征工程是机器学习最重要的步骤', '聚合函数：count, sum, mean, nunique']
+  },
+  {
+    id: 'db-project-10',
+    chapterId: 'chapter-22',
+    title: '端到端分析报告自动生成',
+    description: '整合所有分析，输出结构化报告。运行多个分析模块，将结果写入数据库，生成可视化图表。',
+    difficulty: '综合',
+    skills: ['报告生成', '结果保存', '可视化', '端到端'],
+    initialCode: `import sqlite3
+import pandas as pd
+import numpy as np
+from datetime import datetime
+
+print("=" * 60)
+print("电商数据分析报告自动生成系统")
+print("=" * 60)
+print()
+
+# 创建数据库
+conn = sqlite3.connect("analysis_report.db")
+
+# Step 1: 创建模拟数据
+print("[Step 1] 创建模拟数据...")
+np.random.seed(42)
+
+# 用户表
+users = pd.DataFrame({
+    'user_id': range(1, 31),
+    'age': np.random.randint(18, 55, 30),
+    'gender': np.random.choice(['M', 'F'], 30)
+})
+
+# 订单表
+n_orders = 200
+orders = pd.DataFrame({
+    'order_id': range(1, n_orders + 1),
+    'user_id': np.random.randint(1, 31, n_orders),
+    'amount': np.random.normal(150, 50, n_orders).round(2),
+    'order_date': pd.date_range('2024-01-01', periods=n_orders, freq='3H')
+})
+orders['amount'] = orders['amount'].clip(20, 500)
+
+# 保存原始数据
+users.to_sql('users', conn, index=False, if_exists='replace')
+orders.to_sql('orders', conn, index=False, if_exists='replace')
+print("✓ 数据创建完成")
+print()
+
+# Step 2: RFM分析
+print("[Step 2] 进行RFM分析...")
+reference_date = orders['order_date'].max()
+
+rfm = orders.groupby('user_id').agg({
+    'order_date': lambda x: (reference_date - x.max()).days,
+    'amount': ['count', 'sum']
+})
+rfm.columns = ['Recency', 'Frequency', 'Monetary']
+
+# 简单评分
+rfm['R_score'] = pd.qcut(rfm['Recency'], q=3, labels=[3, 2, 1]).astype(int)
+rfm['F_score'] = pd.qcut(rfm['Frequency'].rank(method='first'), q=3, labels=[1, 2, 3]).astype(int)
+rfm['M_score'] = pd.qcut(rfm['Monetary'].rank(method='first'), q=3, labels=[1, 2, 3]).astype(int)
+rfm['RFM_Score'] = rfm['R_score'] + rfm['F_score'] + rfm['M_score']
+
+# 保存RFM结果
+rfm.reset_index().to_sql('rfm_results', conn, index=False, if_exists='replace')
+print("✓ RFM分析完成并保存")
+print()
+
+# Step 3: 销售趋势分析
+print("[Step 3] 分析销售趋势...")
+orders['date'] = orders['order_date'].dt.date
+daily_sales = orders.groupby('date')['amount'].agg(['sum', 'count']).round(2)
+daily_sales.columns = ['total_sales', 'order_count']
+
+# 保存销售趋势
+daily_sales.reset_index().to_sql('daily_sales', conn, index=False, if_exists='replace')
+print("✓ 销售趋势分析完成并保存")
+print()
+
+# Step 4: 生成报告
+print("[Step 4] 生成分析报告...")
+print()
+print("=" * 60)
+print("电商数据分析报告")
+print("=" * 60)
+print(f"报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print()
+
+print("1. 数据概览")
+print("-" * 40)
+print(f"   用户数: {len(users)}")
+print(f"   订单数: {len(orders)}")
+print(f"   总销售额: {orders['amount'].sum():.2f}")
+print(f"   平均订单金额: {orders['amount'].mean():.2f}")
+print()
+
+print("2. RFM用户分层")
+print("-" * 40)
+print(f"   高价值用户 (RFM>=7): {len(rfm[rfm['RFM_Score'] >=7])} 人")
+print(f"   中等用户 (4<=RFM<7): {len(rfm[(rfm['RFM_Score'] >=4) & (rfm['RFM_Score'] <7)])} 人")
+print(f"   低价值用户 (RFM<4): {len(rfm[rfm['RFM_Score'] <4])} 人")
+print()
+
+print("3. 销售趋势")
+print("-" * 40)
+print(f"   日均销售额: {daily_sales['total_sales'].mean():.2f}")
+print(f"   日均订单数: {daily_sales['order_count'].mean():.1f}")
+print(f"   最高日销售额: {daily_sales['total_sales'].max():.2f}")
+print()
+
+print("4. 策略建议")
+print("-" * 40)
+print("   1. 对高价值用户推出专属优惠，提高忠诚度")
+print("   2. 对中等价值用户进行交叉销售推荐")
+print("   3. 对低价值用户设计唤醒活动")
+print("   4. 关注销售峰值日期，提前做好库存准备")
+print()
+
+print("=" * 60)
+print("分析结果已保存到数据库 analysis_report.db")
+print("表名: rfm_results, daily_sales")
+print("=" * 60)
+
+# 验证报告文件
+cursor = conn.cursor()
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+tables = cursor.fetchall()
+assert len(tables) >= 3, "报告表未正确保存"
+
+# 关闭连接
+conn.close()
+print()
+print("✓ 端到端分析报告生成完成！")
+`,
+    tips: ['可以用 matplotlib/seaborn 生成图表', '报告可以导出为 HTML 或 PDF', '结果保存到数据库方便后续查询']
   }
 ];
 

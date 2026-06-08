@@ -253,6 +253,106 @@ const mockChapters: Chapter[] = [
     studyDurationMinutes: 240,
     keyPoints: ['全链路分析', '流量漏斗', '用户聚类', '策略建议'],
     hasCodePractice: true
+  },
+  {
+    id: 'chapter-13',
+    courseId: 'course-5',
+    title: '项目1：数据库连接与数据抽取（SQL + Pandas）',
+    content: '从数据库中提取销售数据，为分析做准备。使用 SQLite/MySQL 创建订单表、订单明细表、商品表，使用 sqlalchemy + pandas.read_sql 读取数据，验证数据行数与原始表一致。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['SQLite/MySQL数据库', 'SQLAlchemy', 'pandas.read_sql', '数据验证'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-14',
+    courseId: 'course-5',
+    title: '项目2：数据清洗与缺失值处理',
+    content: '掌握真实数据中的缺失值、异常值处理。构造含缺失值的订单表（金额、用户ID缺失），使用 Pandas 进行：删除空行、填充均值、标记缺失，输出清洗前后的统计对比。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['缺失值处理', '数据清洗', '统计对比', '异常值检测'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-15',
+    courseId: 'course-5',
+    title: '项目3：购物车分析（Market Basket Analysis）',
+    content: '使用关联规则挖掘（Apriori / mlxtend）。将订单明细转换为"购物篮"格式（每一行是一个订单的商品清单），计算支持度、置信度、提升度，找出强关联规则（例如 {牛奶} → {面包}）。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['关联规则', 'Apriori算法', '支持度置信度', '提升度'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-16',
+    courseId: 'course-5',
+    title: '项目4：用户消费行为RFM分析',
+    content: '基于最近购买时间、频率、金额进行用户分层。计算每个用户的 R（最近）、F（频率）、M（金额），对每个指标分箱（如1-5分），输出高价值用户名单。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['RFM模型', '用户分层', '分箱操作', '价值评估'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-17',
+    courseId: 'course-5',
+    title: '项目5：时间序列分析与趋势预测',
+    content: '分析销售额随时间变化，使用简单预测模型。将订单数据按日/月聚合，使用 Pandas 重采样与滚动平均，使用 statsmodels 做季节性分解或简单线性回归预测。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['时间序列', '重采样', '滚动平均', '趋势预测'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-18',
+    courseId: 'course-5',
+    title: '项目6：用户聚类分析（KMeans）',
+    content: '基于消费行为将用户分群。选取特征：总消费额、平均客单价、购买品类数，标准化后使用 KMeans 聚类（k=3~5），可视化聚类结果（PCA降维或散点图）。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['K-Means聚类', '特征工程', 'PCA降维', '可视化'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-19',
+    courseId: 'course-5',
+    title: '项目7：商品价格敏感度分析（价格弹性）',
+    content: '分析价格变化对销量的影响。计算不同价格区间的平均销量，拟合对数线性模型估计价格弹性系数，输出价格弹性 > 1 的商品（高敏感）。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['价格弹性', '销量分析', '对数模型', '敏感度评估'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-20',
+    courseId: 'course-5',
+    title: '项目8：实时数据流模拟与滑动窗口聚合',
+    content: '模拟AI场景下的流式数据处理。使用 deque 或 pandas 模拟每5秒到达的订单事件，计算过去1分钟的销售额滑动平均，检测异常峰值（超过均值+3倍标准差）。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['流式数据', '滑动窗口', '异常检测', '实时聚合'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-21',
+    courseId: 'course-5',
+    title: '项目9：多表关联与特征工程',
+    content: '为机器学习模型构建特征表。关联订单表、用户表、商品表、评价表，构造特征：用户历史好评率、商品被购买时段分布，输出可直接用于聚类的特征矩阵。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['多表关联', '特征工程', '评价分析', '特征矩阵'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-22',
+    courseId: 'course-5',
+    title: '项目10：端到端分析报告自动生成',
+    content: '整合所有分析，输出结构化报告。运行以上任意4~6个分析模块，将结果（聚类群体画像、关联规则、RFM表）写入数据库结果表，使用 matplotlib / seaborn 生成图表，并导出为 PDF / HTML。',
+    isCompleted: false,
+    studyDurationMinutes: 240,
+    keyPoints: ['报告生成', '结果保存', '可视化', '端到端'],
+    hasCodePractice: true
   }
 ];
 
