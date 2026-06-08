@@ -6391,486 +6391,374 @@ plt.show()
     tips: ['KMeans聚类前需要标准化特征', '肘部法则和轮廓系数可以帮助确定最佳K值', '聚类后需要为每个簇赋予业务含义']
   },
   {
+  {
     id: 'bi-project-5',
     chapterId: 'chapter-57',
     title: '退货原因文本聚类（非结构化→结构化）',
-    description: '文本清洗、TF-IDF、KMeans文本聚类、词云。退货评论列含短文本，分词、去停用词，转换为TF-IDF矩阵，聚类（3~5类），每类提取高频词，分析主要退货原因。',
+    description: '文本清洗、TF-IDF、KMeans文本聚类、词云。退货评论列含短文本，分词、去停用词，转换为TF-IDF矩阵，聚类分析主要退货原因。',
     difficulty: '进阶',
-    skills: ['文本聚类', 'TF-IDF', '词云分析'],
-    initialCode: `import pandas as pd
+    skills: ['中文分词', 'TF-IDF', '文本聚类', '词云'],
+    initialCode: `# ========== 项目5：退货原因文本聚类 ==========
+import pandas as pd
 import numpy as np
-from sklearn.cluster import KMeans
+import jieba
+import re
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
 
-# 1. 生成模拟退货评论数据
+# 1. 生成退货评论文本
 np.random.seed(42)
-n_returns = 500
 
-# 退货原因模板
-reason_templates = {
-    '质量': [
-        '质量太差，用了几天就坏了',
-        '商品有瑕疵，不满意',
-        '做工粗糙，不值这个价',
-        '材质和描述不符',
-        '质量有问题，申请退货'
-    ],
-    '尺寸': [
-        '尺码偏大/偏小，不合适',
-        '尺寸不合适，需要换货',
-        '大小不合适',
-        '尺码不对',
-        '衣服太大/太小了'
-    ],
-    '外观': [
-        '颜色和图片差距大',
-        '外观和描述不符',
-        '实物不好看',
-        '颜色不喜欢',
-        '款式不喜欢'
-    ],
-    '物流': [
-        '物流太慢，等太久',
-        '包装破损',
-        '收到时商品损坏',
-        '快递服务差',
-        '配送时间太长'
-    ],
-    '服务': [
-        '售后服务态度不好',
-        '客服回复慢',
-        '商家不负责任',
-        '退货流程太复杂',
-        '退款慢'
-    ]
+# 定义各类别的关键词
+categories = {
+    '质量问题': ['质量差', '破损', '坏了', '有问题', '瑕疵', '开裂', '掉色', '做工粗糙', '不结实'],
+    '尺寸问题': ['尺寸不对', '太大', '太小', '不合身', '尺码偏大', '尺码偏小', '不合适', '穿不上'],
+    '物流问题': ['物流慢', '包装破损', '发错货', '漏发', '少件', '快递暴力', '延误', '丢件'],
+    '图片不符': ['色差', '与图片不符', '实物难看', '不像图片', '效果差', '材质不同', '差异大'],
+    '使用问题': ['不会用', '效果不好', '不满意', '没用', '闲置', '不喜欢', '后悔购买']
 }
 
-return_data = []
-for i in range(n_returns):
-    # 随机选择退货原因类型
-    reason_type = np.random.choice(list(reason_templates.keys()))
-    comment = np.random.choice(reason_templates[reason_type])
+reviews = []
+true_labels = []
+
+for _ in range(1000):
+    category = np.random.choice(list(categories.keys()), p=[0.3, 0.25, 0.2, 0.15, 0.1])
+    keywords = categories[category]
     
-    # 添加一些随机噪声
-    if np.random.random() < 0.1:
-        comment = comment + '，另外...'
+    main_keyword = np.random.choice(keywords)
+    extra = np.random.choice(['', '非常', '特别', '有点', '真的很', '太'], p=[0.5, 0.1, 0.1, 0.1, 0.1, 0.1])
+    suffix = np.random.choice(['', '！', '。', '，希望改进', '不会再买了'], p=[0.6, 0.1, 0.1, 0.1, 0.1])
     
-    return_data.append({
-        '退货ID': f'RET{str(i+1).zfill(5)}',
-        '退货原因': comment,
-        '原因类型': reason_type,
-        '退货金额': np.random.uniform(50, 1000),
-        '退货数量': np.random.randint(1, 5)
-    })
+    review = f"{extra}{main_keyword}{suffix}"
+    reviews.append(review)
+    true_labels.append(category)
 
-returns_df = pd.DataFrame(return_data)
+df = pd.DataFrame({'review': reviews, 'true_category': true_labels})
+print("评论示例：")
+print(df.head(10))
+print(f"\n各类别数量：\n{df['true_category'].value_counts()}")
 
-print("="*60)
-print("退货评论数据概览")
-print("="*60)
-print(f"总退货数：{len(returns_df)}")
-print("\\n退货数据前20行：")
-print(returns_df[['退货ID', '退货原因', '原因类型']].head(20))
-print()
-
-# 2. 文本预处理
-print("="*60)
-print("文本预处理")
-print("="*60)
-
-# 定义停用词
-stopwords = ['的', '了', '和', '是', '在', '有', '不', '我', '也', '很', '都', '就', '到', '这', '那', '个', '一', '上', '下', '中', '来', '去', '说', '要', '还', '没', '但']
-
-def clean_text(text):
-    """简单的文本清洗"""
-    # 移除特殊字符
-    text = ''.join(char for char in text if char.isalnum() or char.isspace())
-    # 分词（简化的中文分词）
-    words = text.split()
-    # 移除停用词
-    words = [w for w in words if w not in stopwords and len(w) > 1]
+# 2. 中文文本预处理
+def preprocess_text(text):
+    text = re.sub(r'[^\u4e00-\u9fa5]', '', text)
+    words = jieba.cut(text)
+    words = [w for w in words if len(w) > 1]
     return ' '.join(words)
 
-returns_df['清洗后文本'] = returns_df['退货原因'].apply(clean_text)
-
-print("文本清洗结果：")
-for i in range(10):
-    print(f"  原文：{returns_df.iloc[i]['退货原因']}")
-    print(f"  清洗：{returns_df.iloc[i]['清洗后文本']}")
-    print()
-print()
+df['processed'] = df['review'].apply(preprocess_text)
+print("\n预处理后示例：")
+print(df[['review', 'processed']].head())
 
 # 3. TF-IDF向量化
-print("="*60)
-print("TF-IDF向量化")
-print("="*60)
+vectorizer = TfidfVectorizer(max_features=100, min_df=2, max_df=0.8)
+X = vectorizer.fit_transform(df['processed'])
 
-vectorizer = TfidfVectorizer(max_features=20, min_df=2)
-tfidf_matrix = vectorizer.fit_transform(returns_df['清洗后文本'])
+print(f"\nTF-IDF矩阵形状：{X.shape}")
 
-print(f"TF-IDF矩阵形状：{tfidf_matrix.shape}")
-print(f"特征词数：{len(vectorizer.get_feature_names_out())}")
-print("\\n关键词：")
-print(vectorizer.get_feature_names_out())
-print()
+# 4. 确定最佳聚类数
+silhouette_scores = []
+K_range = range(2, 8)
 
-# 4. KMeans聚类
-print("="*60)
-print("退货原因聚类")
-print("="*60)
+for k in K_range:
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    labels = kmeans.fit_predict(X)
+    if len(set(labels)) > 1:
+        score = silhouette_score(X, labels)
+        silhouette_scores.append(score)
+    else:
+        silhouette_scores.append(-1)
 
-best_k = 5
+best_k = K_range[np.argmax(silhouette_scores)]
+print(f"\n最佳聚类数：{best_k}（轮廓系数={max(silhouette_scores):.3f}）")
+
+# 5. 进行聚类
 kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
-returns_df['簇标签'] = kmeans.fit_predict(tfidf_matrix)
+df['cluster'] = kmeans.fit_predict(X)
 
-print(f"聚类数量：{best_k}")
-print("聚类结果分布：")
-print(returns_df['簇标签'].value_counts().sort_index())
-print()
+# 6. 提取每个聚类的关键词
+def get_cluster_keywords(cluster_id, n_words=5):
+    cluster_docs = df[df['cluster'] == cluster_id]['processed']
+    if len(cluster_docs) == 0:
+        return []
+    combined = ' '.join(cluster_docs)
+    words = combined.split()
+    from collections import Counter
+    word_freq = Counter(words)
+    return word_freq.most_common(n_words)
 
-# 计算轮廓系数
-sil_score = silhouette_score(tfidf_matrix, returns_df['簇标签'])
-print(f"轮廓系数：{sil_score:.4f}")
-print()
+print("\n=== 各聚类关键词 ===")
+cluster_info = {}
+for i in range(best_k):
+    keywords = get_cluster_keywords(i)
+    print(f"\n聚类{i}:")
+    for word, freq in keywords:
+        print(f"  {word}: {freq}次")
+    cluster_info[i] = keywords
 
-# 5. 分析每个聚类
-print("="*60)
-print("各聚类退货原因分析")
-print("="*60)
-
-cluster_analysis = []
-for cluster_id in range(best_k):
-    cluster_data = returns_df[returns_df['簇标签'] == cluster_id]
+# 7. 为聚类打标签
+def label_cluster_by_keywords(keywords):
+    keyword_set = set([kw[0] for kw in keywords])
     
-    # 统计高频词
-    cluster_texts = ' '.join(cluster_data['清洗后文本'].tolist())
-    word_freq = pd.Series(cluster_texts.split()).value_counts()
-    top_words = word_freq.head(5).index.tolist()
-    
-    # 统计原因类型分布
-    reason_dist = cluster_data['原因类型'].value_counts()
-    top_reasons = reason_dist.head(3).index.tolist()
-    
-    # 计算平均退货金额
-    avg_amount = cluster_data['退货金额'].mean()
-    
-    cluster_analysis.append({
-        '簇ID': cluster_id,
-        '退货数': len(cluster_data),
-        '平均金额': avg_amount,
-        '高频原因': ', '.join(top_reasons),
-        '关键词': ', '.join(top_words)
-    })
-
-cluster_df = pd.DataFrame(cluster_analysis)
-
-# 为各簇命名
-def name_cluster(row):
-    keywords = row['关键词']
-    if any(word in keywords for word in ['质量', '瑕疵', '做工']):
-        return '质量问题退货'
-    elif any(word in keywords for word in ['尺码', '大小', '合适']):
-        return '尺寸问题退货'
-    elif any(word in keywords for word in ['颜色', '外观', '款式']):
-        return '外观问题退货'
-    elif any(word in keywords for word in ['物流', '包装', '快递', '配送']):
-        return '物流问题退货'
+    if any(k in keyword_set for k in ['质量', '破损', '瑕疵', '坏了']):
+        return '质量问题'
+    elif any(k in keyword_set for k in ['尺寸', '太大', '太小', '不合身']):
+        return '尺寸问题'
+    elif any(k in keyword_set for k in ['物流', '快递', '包装', '发错']):
+        return '物流问题'
+    elif any(k in keyword_set for k in ['色差', '图片', '实物', '不符']):
+        return '图片不符'
+    elif any(k in keyword_set for k in ['不会', '效果', '闲置']):
+        return '使用问题'
     else:
-        return '其他原因退货'
+        return '其他'
 
-cluster_df['退货类型'] = cluster_df.apply(name_cluster, axis=1)
+cluster_labels = {}
+for i in range(best_k):
+    cluster_labels[i] = label_cluster_by_keywords(cluster_info[i])
 
-print(cluster_df)
-print()
+df['cluster_label'] = df['cluster'].map(cluster_labels)
 
-# 6. 详细分析各类型
-print("="*60)
-print("各退货类型详细分析")
-print("="*60)
+# 8. 验证聚类效果
+from sklearn.metrics import adjusted_rand_score, homogeneity_score
 
-returns_df['退货类型'] = returns_df['簇标签'].map(
-    dict(zip(cluster_df['簇ID'], cluster_df['退货类型']))
-)
+true_numeric = pd.Categorical(df['true_category']).codes
+homogeneity = homogeneity_score(true_numeric, df['cluster'])
+ari = adjusted_rand_score(true_numeric, df['cluster'])
 
-for return_type in cluster_df['退货类型']:
-    type_data = returns_df[returns_df['退货类型'] == return_type]
-    print(f"\\n【{return_type}】（{len(type_data)}单，占比{len(type_data)/len(returns_df)*100:.1f}%）")
-    print(f"  平均退货金额：¥{type_data['退货金额'].mean():.2f}")
-    print(f"  典型评论：")
-    for _, row in type_data.sample(min(3, len(type_data))).iterrows():
-        print(f"    - {row['退货原因']}")
-print()
+print(f"\n=== 聚类验证指标 ===")
+print(f"同质性分数：{homogeneity:.3f}（越高越好，1为完美）")
+print(f"调整兰德指数：{ari:.3f}（越高越好，1为完美）")
 
-# 7. 业务建议
-print("="*60)
-print("业务改进建议")
-print("="*60)
+confusion = pd.crosstab(df['true_category'], df['cluster_label'])
+print(f"\n=== 混淆矩阵 ===")
+print(confusion)
 
-for _, row in cluster_df.iterrows():
-    return_type = row['退货类型']
-    count = row['退货数']
-    pct = count / len(returns_df) * 100
-    
-    print(f"\\n【{return_type}】{count}单（{pct:.1f}%）")
-    if '质量' in return_type:
-        print("  建议：加强供应商质量管控，完善质检流程")
-    elif '尺寸' in return_type:
-        print("  建议：提供详细尺码表，增加试穿/试戴功能")
-    elif '外观' in return_type:
-        print("  建议：优化商品图片展示，提供360度视图")
-    elif '物流' in return_type:
-        print("  建议：升级包装材料，优化物流合作")
-    else:
-        print("  建议：分析具体原因，针对性改进")
+# 9. 可视化
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# 8. 验证
-print()
-print("="*60)
-print("验证结果")
-print("="*60)
-assert '簇标签' in returns_df.columns, "聚类结果缺失"
-print(f"✓ 文本聚类完成，共{len(returns_df)}条退货记录")
-print(f"✓ 发现{best_k}种主要退货原因类型")
-print("✓ 退货原因文本聚类分析完成！")
+all_text = ' '.join(df['processed'])
+wordcloud = WordCloud(width=800, height=400, background_color='white', font_path=None).generate(all_text)
+axes[0].imshow(wordcloud, interpolation='bilinear')
+axes[0].axis('off')
+axes[0].set_title('所有退货评论词云', fontsize=14)
+
+cluster_dist = df['cluster_label'].value_counts()
+colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3']
+axes[1].pie(cluster_dist.values, labels=cluster_dist.index, autopct='%1.1f%%', colors=colors[:len(cluster_dist)])
+axes[1].set_title('退货原因聚类分布', fontsize=14)
+
+plt.tight_layout()
+plt.show()
+
+# 10. 输出分析报告
+print("\n=== 退货原因分析报告 ===")
+for cluster_id, label in cluster_labels.items():
+    cluster_size = len(df[df['cluster'] == cluster_id])
+    top_keywords = cluster_info[cluster_id][:3]
+    print(f"\n{label}（{cluster_size}条评论，{cluster_size/len(df)*100:.1f}%）")
+    print(f"  典型关键词：{', '.join([kw[0] for kw in top_keywords])}")`
 `,
-    tips: ['TF-IDF可以衡量词语在文档中的重要程度', '聚类可以自动发现退货原因的类型', '结合定量和定性分析可以得到更全面的洞察']
+    tips: ['TF-IDF可以提取文本关键词', 'jieba是常用的中文分词库', '词云可以直观展示词频分布']
   },
   {
     id: 'bi-project-6',
     chapterId: 'chapter-58',
     title: '销量预测特征工程与基线模型',
-    description: '时序聚合、特征构造、滞后特征、滚动统计。日销售数据，构造星期、月份、节假日特征，过去7天滚动均值/销量滞后1~7，使用线性回归或决策树预测次日销量，评估RMSE。',
+    description: '时序聚合、特征构造、滞后特征、滚动统计。日销售数据，构造星期、月份、节假日特征，使用线性回归或决策树预测次日销量。',
     difficulty: '进阶',
-    skills: ['特征工程', '销量预测', '时间序列'],
-    initialCode: `import pandas as pd
+    skills: ['特征工程', '时序预测', '滚动统计', '模型评估'],
+    initialCode: `# ========== 项目6：销量预测特征工程 ==========
+import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
 
-# 1. 生成模拟日销售数据
+# 1. 生成日销售数据（带趋势和季节性）
 np.random.seed(42)
-n_days = 365
-start_date = datetime(2024, 1, 1)
+dates = pd.date_range('2023-01-01', '2024-12-31', freq='D')
+n_days = len(dates)
 
-# 基础销量
-base_sales = 500
+trend = np.linspace(100, 200, n_days)
+seasonal = 50 * np.sin(2 * np.pi * np.arange(n_days) / 365)
+weekly = 20 * np.sin(2 * np.pi * np.arange(n_days) / 7)
+noise = np.random.normal(0, 15, n_days)
 
-sales_data = []
-for i in range(n_days):
-    current_date = start_date + timedelta(days=i)
-    
-    # 考虑星期效应（周末销量更高）
-    day_of_week = current_date.weekday()
-    if day_of_week >= 5:  # 周六、周日
-        weekday_factor = 1.3
-    else:
-        weekday_factor = 1.0
-    
-    # 考虑月份效应（年初年末略高）
-    month = current_date.month
-    if month in [1, 2, 11, 12]:  # 年初年末
-        month_factor = 1.2
-    elif month in [6, 7, 8]:  # 夏季
-        month_factor = 1.1
-    else:
-        month_factor = 1.0
-    
-    # 计算销量
-    sales = base_sales * weekday_factor * month_factor * np.random.uniform(0.8, 1.2)
-    
-    sales_data.append({
-        '日期': current_date,
-        '销量': int(sales)
-    })
+sales = trend + seasonal + weekly + noise
+sales = np.maximum(sales, 20)
 
-sales_df = pd.DataFrame(sales_data)
-sales_df['日期'] = pd.to_datetime(sales_df['日期'])
-
-print("="*60)
-print("日销售数据概览")
-print("="*60)
-print(f"数据天数：{len(sales_df)}")
-print("\\n前20天销售数据：")
-print(sales_df.head(20))
-print()
-print("数据统计：")
-print(sales_df['销量'].describe())
-print()
-
-# 2. 特征工程
-print("="*60)
-print("特征工程")
-print("="*60)
-
-# 时间特征
-sales_df['星期'] = sales_df['日期'].dt.dayofweek
-sales_df['月份'] = sales_df['日期'].dt.month
-sales_df['季度'] = sales_df['日期'].dt.quarter
-sales_df['星期几'] = sales_df['日期'].dt.day_name()
-sales_df['月份名称'] = sales_df['日期'].dt.month_name()
-
-# 是否周末
-sales_df['是否周末'] = (sales_df['星期'] >= 5).astype(int)
-
-# 是否月初/月末
-sales_df['是否月初'] = (sales_df['日期'].dt.day <= 5).astype(int)
-sales_df['是否月末'] = (sales_df['日期'].dt.day >= 25).astype(int)
-
-print("时间特征：")
-print(sales_df[['日期', '星期', '星期几', '月份', '季度', '是否周末']].head(20))
-print()
-
-# 滞后特征（Lag Features）
-print("="*60)
-print("滞后特征构造")
-print("="*60)
-
-# 过去1-7天的销量
-for lag in range(1, 8):
-    sales_df[f'销量_lag_{lag}'] = sales_df['销量'].shift(lag)
-
-# 验证：滞后特征不包含未来信息
-print("验证：滞后特征只使用历史值（lag>0）")
-print()
-
-# 滚动统计特征
-sales_df['销量_rolling_7d_mean'] = sales_df['销量'].shift(1).rolling(window=7).mean()
-sales_df['销量_rolling_7d_std'] = sales_df['销量'].shift(1).rolling(window=7).std()
-sales_df['销量_rolling_14d_mean'] = sales_df['销量'].shift(1).rolling(window=14).mean()
-
-print("滚动统计特征（前20行）：")
-print(sales_df[['日期', '销量', '销量_lag_1', '销量_rolling_7d_mean', '销量_rolling_7d_std']].head(20).round(2))
-print()
-
-# 3. 数据准备
-print("="*60)
-print("数据准备")
-print("="*60)
-
-# 选择特征列
-feature_cols = ['星期', '月份', '季度', '是否周末', '是否月初', '是否月末',
-                '销量_lag_1', '销量_lag_2', '销量_lag_3', '销量_lag_4', '销量_lag_5', '销量_lag_6', '销量_lag_7',
-                '销量_rolling_7d_mean', '销量_rolling_7d_std', '销量_rolling_14d_mean']
-
-# 删除含有NaN的行（由于滞后特征）
-df_model = sales_df.dropna(subset=feature_cols + ['销量']).copy()
-
-print(f"有效数据行数：{len(df_model)}（删除{len(sales_df) - len(df_model)}行NaN）")
-
-# 划分训练集和测试集
-train_size = int(len(df_model) * 0.8)
-train_df = df_model.iloc[:train_size]
-test_df = df_model.iloc[train_size:]
-
-X_train = train_df[feature_cols]
-y_train = train_df['销量']
-X_test = test_df[feature_cols]
-y_test = test_df['销量']
-
-print(f"训练集大小：{len(X_train)}")
-print(f"测试集大小：{len(X_test)}")
-print()
-
-# 4. 构建基线模型（使用平均值的简单预测）
-print("="*60)
-print("基线模型（简单平均）")
-print("="*60)
-
-# 预测值 = 过去7天平均
-baseline_pred = X_test['销量_rolling_7d_mean']
-baseline_rmse = np.sqrt(((y_test - baseline_pred) ** 2).mean())
-
-print(f"基线模型RMSE：{baseline_rmse:.2f}")
-print()
-
-# 5. 线性回归模型
-print("="*60)
-print("线性回归模型")
-print("="*60)
-
-# 简化的线性回归实现
-X_train_bias = np.column_stack([np.ones(len(X_train)), X_train.values])
-X_test_bias = np.column_stack([np.ones(len(X_test)), X_test.values])
-
-# 正规方程求解
-theta = np.linalg.lstsq(X_train_bias, y_train.values, rcond=None)[0]
-lr_pred = X_test_bias @ theta
-
-lr_rmse = np.sqrt(((y_test - lr_pred) ** 2).mean())
-
-print(f"线性回归RMSE：{lr_rmse:.2f}")
-print(f"RMSE改善：{((baseline_rmse - lr_rmse) / baseline_rmse * 100):.2f}%")
-print()
-
-# 6. 模型评估
-print("="*60)
-print("模型评估")
-print("="*60)
-
-# 计算准确率（误差<20%的比例）
-threshold = 0.2
-baseline_accuracy = (abs(y_test - baseline_pred) / y_test < threshold).mean()
-lr_accuracy = (abs(y_test - lr_pred) / y_test < threshold).mean()
-
-print("预测准确率（误差<20%）：")
-print(f"  基线模型：{baseline_accuracy:.2%}")
-print(f"  线性回归：{lr_accuracy:.2%}")
-print()
-
-# 特征重要性（简化的系数）
-print("特征重要性（线性回归系数）：")
-feature_importance = pd.DataFrame({
-    '特征': ['截距'] + feature_cols,
-    '系数': theta
-}).sort_values('系数', key=abs, ascending=False)
-print(feature_importance.head(10).round(4))
-print()
-
-# 7. 预测结果示例
-print("="*60)
-print("预测结果示例（后10天）")
-print("="*60)
-
-result_df = pd.DataFrame({
-    '日期': test_df['日期'].values[-10:],
-    '实际销量': y_test.values[-10:],
-    '预测销量': lr_pred[-10:].round(0).astype(int),
-    '误差': (lr_pred[-10:] - y_test.values[-10:]).round(2),
-    '误差率': ((lr_pred[-10:] - y_test.values[-10:]) / y_test.values[-10:] * 100).round(2)
+df = pd.DataFrame({
+    'date': dates,
+    'sales': sales
 })
-print(result_df)
-print()
 
-# 8. 业务应用
-print("="*60)
-print("业务应用建议")
-print("="*60)
+print("数据预览：")
+print(df.head())
+print(f"\n销量统计：均值={df['sales'].mean():.0f}, 标准差={df['sales'].std():.0f}")
 
-print("1. 库存优化：根据预测销量调整备货量")
-print("2. 人员排班：预测高峰时段提前安排人员")
-print("3. 营销活动：预测低销量时段进行促销")
-print("4. 物流调度：提前调整配送资源")
-print()
+# 2. 数据清洗
+df = df.drop_duplicates(subset=['date'])
+df = df.sort_values('date')
+df = df[df['sales'] > 0]
 
-# 9. 验证
-print("="*60)
-print("验证结果")
-print("="*60)
+mean_sales = df['sales'].mean()
+std_sales = df['sales'].std()
+df = df[(df['sales'] >= mean_sales - 3*std_sales) & (df['sales'] <= mean_sales + 3*std_sales)]
 
-# 验证：滞后特征确实不包含未来信息
-for lag in range(1, 8):
-    assert f'销量_lag_{lag}' in df_model.columns, f"缺少滞后特征 lag_{lag}"
+print(f"清洗后数据长度：{len(df)}")
 
-# 验证：预测RMSE应该小于基线
-assert lr_rmse < baseline_rmse * 1.1, "模型性能过差"
+# 3. 特征工程
+def create_features(df):
+    df = df.copy()
+    df['date'] = pd.to_datetime(df['date'])
+    
+    df['year'] = df['date'].dt.year
+    df['month'] = df['date'].dt.month
+    df['day'] = df['date'].dt.day
+    df['dayofweek'] = df['date'].dt.dayofweek
+    df['quarter'] = df['date'].dt.quarter
+    df['dayofyear'] = df['date'].dt.dayofyear
+    df['weekend'] = (df['dayofweek'] >= 5).astype(int)
+    
+    df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
+    df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
+    df['dayofweek_sin'] = np.sin(2 * np.pi * df['dayofweek'] / 7)
+    df['dayofweek_cos'] = np.cos(2 * np.pi * df['dayofweek'] / 7)
+    
+    for lag in [1, 2, 3, 7, 14]:
+        df[f'lag_{lag}'] = df['sales'].shift(lag)
+    
+    for window in [3, 7, 14, 30]:
+        df[f'rolling_mean_{window}'] = df['sales'].rolling(window).mean()
+        df[f'rolling_std_{window}'] = df['sales'].rolling(window).std()
+    
+    df['diff_1'] = df['sales'].diff(1)
+    df['diff_7'] = df['sales'].diff(7)
+    
+    holiday_dates = ['2023-01-01', '2023-05-01', '2023-10-01', '2024-01-01', '2024-05-01', '2024-10-01']
+    df['is_holiday'] = df['date'].dt.strftime('%Y-%m-%d').isin(holiday_dates).astype(int)
+    
+    return df
 
-print("✓ 特征工程验证通过")
-print(f"✓ 销量预测完成，测试集RMSE：{lr_rmse:.2f}")
-print(f"✓ 预测准确率（误差<20%）：{lr_accuracy:.2%}")
+df_feat = create_features(df)
+df_feat = df_feat.dropna().reset_index(drop=True)
+
+print(f"\n特征工程后数据形状：{df_feat.shape}")
+print(f"特征列表：\n{df_feat.columns.tolist()}")
+
+# 4. 准备训练数据
+feature_cols = ['month', 'day', 'dayofweek', 'quarter', 'weekend',
+                'month_sin', 'month_cos', 'dayofweek_sin', 'dayofweek_cos',
+                'lag_1', 'lag_2', 'lag_3', 'lag_7', 'lag_14',
+                'rolling_mean_3', 'rolling_mean_7', 'rolling_mean_14', 'rolling_mean_30',
+                'rolling_std_7', 'rolling_std_14',
+                'diff_1', 'diff_7', 'is_holiday']
+
+X = df_feat[feature_cols]
+y = df_feat['sales']
+
+train_size = int(len(X) * 0.8)
+X_train, X_test = X[:train_size], X[train_size:]
+y_train, y_test = y[:train_size], y[train_size:]
+
+print(f"\n训练集：{len(X_train)}样本，测试集：{len(X_test)}样本")
+
+# 5. 训练模型
+models = {
+    'Linear Regression': LinearRegression(),
+    'Random Forest': RandomForestRegressor(n_estimators=100, random_state=42)
+}
+
+results = {}
+for name, model in models.items():
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+    mae = mean_absolute_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+    
+    results[name] = {'rmse': rmse, 'mae': mae, 'r2': r2, 'predictions': y_pred}
+    
+    print(f"\n{name}:")
+    print(f"  RMSE: {rmse:.2f}")
+    print(f"  MAE: {mae:.2f}")
+    print(f"  R2: {r2:.3f}")
+
+# 6. 验证特征无未来信息
+print("\n=== 验证特征无未来信息 ===")
+for lag in [1, 2, 3, 7, 14]:
+    corr = df_feat[f'lag_{lag}'].corr(df_feat['sales'].shift(-lag))
+    print(f"lag_{lag}与未来{lag}天销量的相关性：{corr:.3f}")
+
+# 7. 特征重要性分析
+rf_model = models['Random Forest']
+feature_importance = pd.DataFrame({
+    'feature': feature_cols,
+    'importance': rf_model.feature_importances_
+}).sort_values('importance', ascending=False)
+
+print("\n=== 特征重要性Top10 ===")
+print(feature_importance.head(10))
+
+# 8. 验证计算
+df_test = df_feat.copy()
+df_test['naive_pred'] = df_test['sales'].shift(1).rolling(7).mean()
+df_test = df_test.dropna()
+
+naive_mae = mean_absolute_error(df_test['sales'], df_test['naive_pred'])
+print(f"\n简单预测（过去7天均值）的MAE：{naive_mae:.2f}")
+print(f"随机森林模型MAE提升：{(naive_mae - results['Random Forest']['mae'])/naive_mae*100:.1f}%")
+
+# 9. 可视化
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+test_dates = df_feat['date'].iloc[train_size:].values
+axes[0,0].plot(test_dates, y_test, label='实际销量', alpha=0.7)
+axes[0,0].plot(test_dates, results['Random Forest']['predictions'], label='随机森林预测', alpha=0.7)
+axes[0,0].set_xlabel('日期')
+axes[0,0].set_ylabel('销量')
+axes[0,0].set_title('销量预测 vs 实际值')
+axes[0,0].legend()
+axes[0,0].tick_params(axis='x', rotation=45)
+
+residuals = y_test - results['Random Forest']['predictions']
+axes[0,1].hist(residuals, bins=30, edgecolor='black', alpha=0.7)
+axes[0,1].axvline(x=0, color='r', linestyle='--')
+axes[0,1].set_xlabel('预测误差')
+axes[0,1].set_ylabel('频次')
+axes[0,1].set_title(f'残差分布（均值={residuals.mean():.1f}，标准差={residuals.std():.1f}）')
+
+axes[1,0].barh(feature_importance.head(10)['feature'], feature_importance.head(10)['importance'])
+axes[1,0].set_xlabel('重要性')
+axes[1,0].set_title('Top10特征重要性（随机森林）')
+
+model_names = list(results.keys())
+metrics = ['rmse', 'mae']
+x = np.arange(len(model_names))
+width = 0.35
+
+for i, metric in enumerate(metrics):
+    values = [results[m][metric] for m in model_names]
+    axes[1,1].bar(x + i*width, values, width, label=metric.upper())
+
+axes[1,1].set_xlabel('模型')
+axes[1,1].set_ylabel('误差值')
+axes[1,1].set_title('模型性能对比')
+axes[1,1].set_xticks(x + width/2)
+axes[1,1].set_xticklabels(model_names)
+axes[1,1].legend()
+
+plt.tight_layout()
+plt.show()`
 `,
-    tips: ['滞后特征只能使用历史数据，不能包含未来信息', 'RMSE是回归任务的常用评估指标，越小越好', '特征工程的质量直接影响模型效果']
+    tips: ['滞后特征只使用历史值，不包含未来信息', '滚动统计可以捕捉趋势变化', '随机森林可以评估特征重要性']
   },
-  {
     id: 'bi-project-7',
     chapterId: 'chapter-59',
     title: '商品价格敏感度聚类分析（价格带偏好）',
