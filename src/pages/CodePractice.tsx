@@ -2677,6 +2677,1400 @@ assert df['折扣率'].mean() > 0, "折扣率计算错误"
 print("\\n✓ 价格弹性测试完成！")
 `,
     tips: ['折扣率 = 实付金额 / 原价金额', '折扣率越高说明打折越少（价格不敏感）', '可以用回归分析量化价格弹性系数']
+  },
+  {
+    id: 'dcp-project-1',
+    chapterId: 'chapter-33',
+    title: '电商用户购物车行为数据清洗',
+    description: '掌握Pandas处理缺失值、重复值、异常值、格式规范化。处理缺失的用户ID和负数数量，去重，转换时间列，筛选加购但未下单数据。',
+    difficulty: '基础',
+    skills: ['数据清洗', '缺失值处理', '异常值检测', '格式转换'],
+    initialCode: `import pandas as pd
+import numpy as np
+from datetime import datetime
+
+# 生成模拟购物车数据
+np.random.seed(42)
+n = 1000
+
+data = {
+    '用户ID': np.random.randint(1, 51, n),
+    '商品ID': np.random.randint(1, 21, n),
+    '加购时间': pd.date_range('2024-01-01', periods=n, freq='30min'),
+    '数量': np.random.randint(1, 6, n),
+    '价格': np.random.uniform(10, 500, n).round(2),
+    '是否下单': np.random.choice([0, 1], n, p=[0.3, 0.7])
+}
+
+df = pd.DataFrame(data)
+
+# 引入噪声：缺失值、负数、重复、错误格式
+df.loc[np.random.choice(n, 50), '用户ID'] = np.nan  # 50个缺失用户ID
+df.loc[np.random.choice(n, 30), '数量'] = -np.random.randint(1, 4, 30)  # 30个负数数量
+df = pd.concat([df, df.sample(100, random_state=42)], ignore_index=True)  # 重复100行
+
+print("="*60)
+print("原始数据统计")
+print("="*60)
+print(f"原始行数：{len(df)}")
+print(f"缺失值统计：")
+print(df.isnull().sum())
+print()
+
+# 任务1：处理缺失的用户ID - 直接删除
+print("="*60)
+print("任务1：处理缺失的用户ID")
+print("="*60)
+df_clean = df.dropna(subset=['用户ID']).copy()
+df_clean['用户ID'] = df_clean['用户ID'].astype(int)
+print(f"删除缺失后行数：{len(df_clean)}")
+print()
+
+# 任务2：处理负数数量 - 设置为1
+print("="*60)
+print("任务2：处理负数数量")
+print("="*60)
+negative_count = (df_clean['数量'] < 0).sum()
+print(f"负数数量行数：{negative_count}")
+df_clean['数量'] = df_clean['数量'].apply(lambda x: max(x, 1))
+print()
+
+# 任务3：去重
+print("="*60)
+print("任务3：去重")
+print("="*60)
+duplicates = df_clean.duplicated().sum()
+df_clean = df_clean.drop_duplicates()
+print(f"删除重复后行数：{len(df_clean)}")
+print()
+
+# 任务4：转换时间列
+print("="*60)
+print("任务4：转换时间列")
+print("="*60)
+df_clean['加购时间'] = pd.to_datetime(df_clean['加购时间'])
+print(f"加购时间列类型：{df_clean['加购时间'].dtype}")
+print()
+
+# 任务5：筛选加购但未下单数据
+print("="*60)
+print("任务5：筛选加购但未下单数据")
+print("="*60)
+df_abandon = df_clean[df_clean['是否下单'] == 0].copy()
+print(f"加购但未下单订单数：{len(df_abandon)}")
+print(f"整体放弃率：{len(df_abandon)/len(df_clean)*100:.2f}%")
+print()
+
+# 输出清洗前后对比
+print("="*60)
+print("清洗前后对比")
+print("="*60)
+print(f"清洗前行数：{len(df)}")
+print(f"清洗后行数：{len(df_clean)}")
+print(f"删除行数：{len(df) - len(df_clean)}")
+print()
+
+print("="*60)
+print("清洗后数据前10行：")
+print(df_clean.head(10))
+print()
+
+# 验证
+assert df_clean['用户ID'].isnull().sum() == 0, "仍有缺失用户ID"
+assert (df_clean['数量'] < 0).sum() == 0, "仍有负数数量"
+assert df_clean.duplicated().sum() == 0, "仍有重复行"
+print("✓ 数据清洗完成！")
+`,
+    tips: ['处理缺失值时，考虑业务含义：用户ID缺失直接删除，商品数量缺失可以填充', '异常值处理可以用截断、填充或删除', '时间列一定要转换为datetime类型方便后续分析']
+  },
+  {
+    id: 'dcp-project-2',
+    chapterId: 'chapter-34',
+    title: 'Web爬取动态商品价格数据并清洗',
+    description: '使用requests+BeautifulSoup爬取电商网站商品标题、价格、评价数。解析HTML，提取数值，清洗价格，统一评价数单位。',
+    difficulty: '基础',
+    skills: ['网络爬虫', '数据采集', 'HTML解析', '数据清洗'],
+    initialCode: `import pandas as pd
+import numpy as np
+import re
+from bs4 import BeautifulSoup
+import requests
+
+print("="*60)
+print("模拟电商网站数据采集")
+print("="*60)
+print()
+
+# 模拟商品数据（实际项目中通过requests请求真实页面）
+products_html = '''
+<div class="product-item">
+    <h3 class="product-title">iPhone 15 Pro Max 256GB</h3>
+    <span class="price">¥8,999.00</span>
+    <span class="reviews">12.5万评价</span>
+</div>
+<div class="product-item">
+    <h3 class="product-title">MacBook Air M2 15英寸</h3>
+    <span class="price">¥12,499</span>
+    <span class="reviews">5.2万评价</span>
+</div>
+<div class="product-item">
+    <h3 class="product-title">AirPods Pro (第二代)</h3>
+    <span class="price">¥1,899</span>
+    <span class="reviews">35,600评价</span>
+</div>
+<div class="product-item">
+    <h3 class="product-title">iPad Pro 12.9英寸</h3>
+    <span class="price">¥9,299.00</span>
+    <span class="reviews">8,900评价</span>
+</div>
+<div class="product-item">
+    <h3 class="product-title">Apple Watch Series 9</h3>
+    <span class="price">¥3,199</span>
+    <span class="reviews">2.1万评价</span>
+</div>
+'''
+
+soup = BeautifulSoup(products_html, 'html.parser')
+product_items = soup.find_all('div', class_='product-item')
+
+data = []
+for item in product_items:
+    title = item.find('h3', class_='product-title').text.strip()
+    price_str = item.find('span', class_='price').text.strip()
+    reviews_str = item.find('span', class_='reviews').text.strip()
+    
+    data.append({
+        '商品标题': title,
+        '价格': price_str,
+        '评价数': reviews_str
+    })
+
+df = pd.DataFrame(data)
+print("原始数据：")
+print(df)
+print()
+print("原始数据类型：")
+print(df.dtypes)
+print()
+
+# 任务1：清洗价格
+print("="*60)
+print("任务1：清洗价格")
+print("="*60)
+def clean_price(price_str):
+    # 移除¥符号和逗号
+    cleaned = price_str.replace('¥', '').replace(',', '')
+    return float(cleaned)
+
+df['价格_clean'] = df['价格'].apply(clean_price)
+print(df[['商品标题', '价格', '价格_clean']])
+print()
+
+# 任务2：统一评价数单位
+print("="*60)
+print("任务2：统一评价数单位")
+print("="*60)
+def clean_reviews(review_str):
+    review_str = review_str.replace('评价', '')
+    if '万' in review_str:
+        # 处理如 "12.5万" 这样的格式
+        num = float(review_str.replace('万', ''))
+        return int(num * 10000)
+    else:
+        # 处理如 "35,600" 这样的格式
+        return int(review_str.replace(',', ''))
+
+df['评价数_clean'] = df['评价数'].apply(clean_reviews)
+print(df[['商品标题', '评价数', '评价数_clean']])
+print()
+
+# 输出清洗后完整数据
+print("="*60)
+print("清洗后完整数据：")
+print(df)
+print()
+print("清洗后数据类型：")
+print(df.dtypes)
+print()
+
+# 简单统计
+print("="*60)
+print("简单统计：")
+print("="*60)
+print(f"商品平均价格：¥{df['价格_clean'].mean():.2f}")
+print(f"总评价数：{df['评价数_clean'].sum():,}")
+print(f"最多评价商品：{df.loc[df['评价数_clean'].idxmax(), '商品标题']} ({df['评价数_clean'].max():,}评价)")
+print()
+
+# 验证
+assert df['价格_clean'].isnull().sum() == 0, "价格清洗存在缺失"
+assert df['评价数_clean'].isnull().sum() == 0, "评价数清洗存在缺失"
+print("✓ 数据采集与清洗完成！")
+`,
+    tips: ['实际爬虫时要遵守网站robots.txt协议', '价格清洗要注意货币符号、千分位逗号、小数点等', "评价数经常有'万'这样的单位，需要统一转换"]
+  },
+  {
+    id: 'dcp-project-3',
+    chapterId: 'chapter-35',
+    title: '购物车关联规则分析（Apriori算法准备）',
+    description: '购物车分析的经典场景——找出"经常一起购买"的商品。按订单ID聚合为购物篮，生成0-1矩阵，计算支持度、置信度、提升度。',
+    difficulty: '进阶',
+    skills: ['关联规则', 'Apriori算法', '支持度', '置信度'],
+    initialCode: `import pandas as pd
+import numpy as np
+from itertools import combinations
+
+np.random.seed(42)
+
+# 商品列表
+products = ['牛奶', '面包', '黄油', '鸡蛋', '酸奶', '啤酒', '花生', '纸尿裤', '巧克力', '饼干']
+
+# 生成模拟订单数据
+order_data = []
+n_orders = 500
+
+for order_id in range(1, n_orders + 1):
+    # 随机选择1-5个商品
+    num_items = np.random.randint(1, 6)
+    items = np.random.choice(products, num_items, replace=False)
+    for item in items:
+        order_data.append({
+            '订单ID': order_id,
+            '商品名': item
+        })
+
+df = pd.DataFrame(order_data)
+print("订单明细（前20行）：")
+print(df.head(20))
+print()
+
+# 任务1：按订单ID聚合为购物篮
+print("="*60)
+print("任务1：按订单ID聚合为购物篮")
+print("="*60)
+basket = df.groupby('订单ID')['商品名'].apply(list).reset_index()
+basket.columns = ['订单ID', '购物篮']
+print(f"总订单数：{len(basket)}")
+print("购物篮格式（前10个）：")
+for i in range(min(10, len(basket))):
+    print(f"订单{basket.iloc[i]['订单ID']}: {basket.iloc[i]['购物篮']}")
+print()
+
+# 任务2：生成0-1矩阵
+print("="*60)
+print("任务2：生成0-1矩阵")
+print("="*60)
+matrix = df.pivot_table(index='订单ID', columns='商品名', aggfunc='size', fill_value=0)
+print(f"0-1矩阵形状：{matrix.shape}")
+print("0-1矩阵（前10行，前6列）：")
+print(matrix.iloc[:10, :6])
+print()
+
+# 任务3：计算单个商品支持度
+print("="*60)
+print("任务3：计算单个商品支持度")
+print("="*60)
+support_single = matrix.mean().sort_values(ascending=False)
+print("商品支持度排序：")
+print(support_single.round(4))
+print()
+
+# 任务4：计算商品对支持度、置信度、提升度
+print("="*60)
+print("任务4：计算商品对关联规则")
+print("="*60)
+
+# 计算两两共现次数
+co_occur = matrix.T.dot(matrix)
+np.fill_diagonal(co_occur.values, 0)  # 对角线设为0，不考虑自关联
+
+rules = []
+for item1 in products:
+    for item2 in products:
+        if item1 != item2:
+            support_both = co_occur.loc[item1, item2] / n_orders
+            if support_both > 0:
+                support_a = support_single[item1]
+                support_b = support_single[item2]
+                confidence = support_both / support_a
+                lift = confidence / support_b
+                
+                rules.append({
+                    '前件': item1,
+                    '后件': item2,
+                    '支持度': support_both,
+                    '置信度': confidence,
+                    '提升度': lift
+                })
+
+rules_df = pd.DataFrame(rules)
+rules_df = rules_df.sort_values('提升度', ascending=False).reset_index(drop=True)
+
+print("Top 20 关联规则（按提升度排序）：")
+print(rules_df[['前件', '后件', '支持度', '置信度', '提升度']].head(20).round(4))
+print()
+
+# 输出支持度>0.02的规则
+print("="*60)
+print("支持度 > 0.02 的强关联规则：")
+print("="*60)
+strong_rules = rules_df[rules_df['支持度'] > 0.02].sort_values('提升度', ascending=False)
+print(strong_rules[['前件', '后件', '支持度', '置信度', '提升度']].round(4))
+print()
+
+# 验证
+assert len(rules_df) > 0, "没有生成有效规则"
+assert len(rules_df[rules_df['提升度'] > 1]) > 0, "没有找到正向关联规则"
+print("✓ 关联规则分析完成！")
+`,
+    tips: ['支持度：商品组合出现的频率', '置信度：购买了A后购买B的概率', '提升度：关联强度，>1表示正相关，<1表示负相关']
+  },
+  {
+    id: 'dcp-project-4',
+    chapterId: 'chapter-36',
+    title: '用户购物车放弃率分析与预测特征构建',
+    description: '分析加购后未下单的原因。合并购物车表+用户行为日志，计算加购到下单的时间差，创建特征，按用户聚合统计历史放弃率。',
+    difficulty: '进阶',
+    skills: ['放弃率分析', '特征工程', '用户行为分析', '数据合并'],
+    initialCode: `import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+
+np.random.seed(42)
+
+# 生成购物车表
+cart_data = []
+user_ids = list(range(1, 51))
+n_cart = 1000
+
+for cart_id in range(1, n_cart + 1):
+    user_id = np.random.choice(user_ids)
+    add_time = datetime(2024, 1, 1) + timedelta(minutes=np.random.randint(0, 60*24*30))
+    quantity = np.random.randint(1, 6)
+    price = np.random.uniform(10, 500)
+    is_abandon = np.random.choice([0, 1], p=[0.65, 0.35])
+    
+    # 下单时间（如果不下单则为空）
+    order_time = None
+    if is_abandon == 0:
+        order_time = add_time + timedelta(minutes=np.random.randint(5, 120))
+    
+    cart_data.append({
+        '购物车ID': cart_id,
+        '用户ID': user_id,
+        '加购时间': add_time,
+        '下单时间': order_time,
+        '是否放弃': is_abandon,
+        '商品数量': quantity,
+        '商品价格': price
+    })
+
+cart_df = pd.DataFrame(cart_data)
+
+# 生成用户行为日志
+behavior_data = []
+for cart in cart_data:
+    cart_id = cart['购物车ID']
+    user_id = cart['用户ID']
+    add_time = cart['加购时间']
+    
+    # 每个购物车会话有若干行为记录
+    n_events = np.random.randint(3, 8)
+    for i in range(n_events):
+        event_time = add_time - timedelta(minutes=np.random.randint(0, 30))
+        event_type = np.random.choice(['浏览商品', '加入购物车', '查看购物车', '修改数量'], 
+                                     p=[0.5, 0.2, 0.2, 0.1])
+        behavior_data.append({
+            '会话ID': cart_id,
+            '用户ID': user_id,
+            '事件时间': event_time,
+            '事件类型': event_type
+        })
+
+behavior_df = pd.DataFrame(behavior_data)
+behavior_df = behavior_df.sort_values(['会话ID', '事件时间']).reset_index(drop=True)
+
+print("="*60)
+print("购物车表（前10行）：")
+print("="*60)
+print(cart_df.head(10))
+print()
+print("用户行为日志（前20行）：")
+print("="*60)
+print(behavior_df.head(20))
+print()
+
+# 任务1：计算加购到下单的时间差
+print("="*60)
+print("任务1：计算加购到下单的时间差")
+print("="*60)
+cart_df['加购时间'] = pd.to_datetime(cart_df['加购时间'])
+cart_df['下单时间'] = pd.to_datetime(cart_df['下单时间'])
+cart_df['决策时间(分钟)'] = (cart_df['下单时间'] - cart_df['加购时间']).dt.total_seconds() / 60
+
+print(f"放弃订单数：{cart_df['是否放弃'].sum()}")
+print(f"完成订单数：{len(cart_df) - cart_df['是否放弃'].sum()}")
+print(f"整体放弃率：{cart_df['是否放弃'].mean()*100:.2f}%")
+print()
+
+completed_df = cart_df[cart_df['是否放弃'] == 0]
+print(f"平均决策时间：{completed_df['决策时间(分钟)'].mean():.1f}分钟")
+print()
+
+# 任务2：按时间段分析放弃率
+print("="*60)
+print("任务2：按时间段分析放弃率")
+print("="*60)
+cart_df['加购时段'] = pd.cut(
+    cart_df['加购时间'].dt.hour,
+    bins=[0, 6, 12, 18, 24],
+    labels=['凌晨', '上午', '下午', '晚上']
+)
+
+abandon_by_hour = cart_df.groupby('加购时段')['是否放弃'].agg(['count', 'mean'])
+abandon_by_hour.columns = ['订单数', '放弃率']
+print(abandon_by_hour.round(4))
+print()
+
+# 任务3：按用户聚合统计历史放弃率
+print("="*60)
+print("任务3：按用户聚合统计历史放弃率")
+print("="*60)
+user_features = cart_df.groupby('用户ID').agg({
+    '购物车ID': 'count',  # 总购物车次数
+    '是否放弃': 'mean',  # 历史放弃率
+    '商品数量': 'mean',  # 平均加购数量
+    '商品价格': 'mean'  # 平均加购价格
+}).reset_index()
+user_features.columns = ['用户ID', '总购物车次数', '历史放弃率', '平均加购数量', '平均加购价格']
+
+print("用户特征（前10名）：")
+print(user_features.head(10).round(4))
+print()
+
+# 输出放弃率最高的用户
+print("历史放弃率最高的5个用户：")
+top_abandon_users = user_features.sort_values('历史放弃率', ascending=False).head()
+print(top_abandon_users.round(4))
+print()
+
+# 验证
+assert '历史放弃率' in user_features.columns, "特征缺失"
+print("✓ 特征工程完成！")
+`,
+    tips: ['合并表时要注意主键是否对应', '特征工程要考虑业务含义：历史放弃率很可能是预测用户是否放弃的重要特征', '可以按时间维度（小时、周几、月份）来分析用户行为规律']
+  },
+  {
+    id: 'dcp-project-5',
+    chapterId: 'chapter-37',
+    title: 'RFM用户价值分析（基于购买和加购）',
+    description: '将购物车数据转化为用户分层。计算RFM三个维度，分箱并打分，识别高价值用户。',
+    difficulty: '进阶',
+    skills: ['RFM模型', '用户分层', '价值分析', '分箱操作'],
+    initialCode: `import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+
+np.random.seed(42)
+
+# 生成模拟数据：同时包含购买记录和加购记录
+n_users = 100
+n_records = 2000
+
+# 购买记录
+purchase_data = []
+for _ in range(n_records):
+    user_id = np.random.randint(1, n_users + 1)
+    purchase_date = datetime(2024, 1, 1) + timedelta(days=np.random.randint(0, 90))
+    amount = np.random.normal(200, 80)
+    purchase_data.append({
+        '用户ID': user_id,
+        '日期': purchase_date,
+        '金额': max(amount, 10),
+        '类型': '购买'
+    })
+
+# 加购记录
+cart_data = []
+for _ in range(n_records * 2):
+    user_id = np.random.randint(1, n_users + 1)
+    cart_date = datetime(2024, 1, 1) + timedelta(days=np.random.randint(0, 90))
+    amount = np.random.normal(150, 60)
+    cart_data.append({
+        '用户ID': user_id,
+        '日期': cart_date,
+        '金额': max(amount, 5),
+        '类型': '加购'
+    })
+
+df = pd.DataFrame(purchase_data + cart_data)
+df['日期'] = pd.to_datetime(df['日期'])
+print(f"总记录数：{len(df)}")
+print("数据前10行：")
+print(df.head(10))
+print()
+
+reference_date = datetime(2024, 4, 1)
+print(f"参考日期：{reference_date}")
+print()
+
+# 任务1：基于购买记录计算RFM
+print("="*60)
+print("任务1：基于购买记录计算RFM")
+print("="*60)
+purchase_df = df[df['类型'] == '购买'].copy()
+
+rfm_purchase = purchase_df.groupby('用户ID').agg({
+    '日期': lambda x: (reference_date - x.max()).days,  # R：最近消费天数
+    '金额': ['count', 'sum']  # F：消费频次，M：消费金额
+}).reset_index()
+
+rfm_purchase.columns = ['用户ID', 'R_购买', 'F_购买', 'M_购买']
+print("购买RFM（前15名）：")
+print(rfm_purchase.head(15).round(2))
+print()
+
+# 任务2：基于加购记录计算RFM
+print("="*60)
+print("任务2：基于加购记录计算RFM")
+print("="*60)
+cart_only_df = df[df['类型'] == '加购'].copy()
+
+rfm_cart = cart_only_df.groupby('用户ID').agg({
+    '日期': lambda x: (reference_date - x.max()).days,  # R：最近加购天数
+    '金额': ['count', 'sum']  # F：加购频次，M：加购金额
+}).reset_index()
+
+rfm_cart.columns = ['用户ID', 'R_加购', 'F_加购', 'M_加购']
+print("加购RFM（前15名）：")
+print(rfm_cart.head(15).round(2))
+print()
+
+# 任务3：合并两个RFM
+print("="*60)
+print("任务3：合并RFM并分箱打分")
+print("="*60)
+rfm_combined = pd.merge(rfm_purchase, rfm_cart, on='用户ID', how='outer').fillna(0)
+
+# 对R分箱（R越小越好，所以标签反转）
+rfm_combined['R_购买_score'] = pd.qcut(rfm_combined['R_购买'], q=4, labels=[4, 3, 2, 1]).astype(int)
+# 对F分箱（F越大越好）
+rfm_combined['F_购买_score'] = pd.qcut(rfm_combined['F_购买'].rank(method='first'), q=4, labels=[1, 2, 3, 4]).astype(int)
+# 对M分箱（M越大越好）
+rfm_combined['M_购买_score'] = pd.qcut(rfm_combined['M_购买'].rank(method='first'), q=4, labels=[1, 2, 3, 4]).astype(int)
+
+# 计算总分
+rfm_combined['RFM总分'] = rfm_combined['R_购买_score'] + rfm_combined['F_购买_score'] + rfm_combined['M_购买_score']
+
+print("合并后的RFM（前20名）：")
+print(rfm_combined.head(20).round(2))
+print()
+
+# 任务4：识别高价值用户（RFM总分>=10）
+print("="*60)
+print("任务4：识别高价值用户")
+print("="*60)
+high_value_users = rfm_combined[rfm_combined['RFM总分'] >= 10]
+print(f"高价值用户数：{len(high_value_users)}")
+print(f"高价值用户占比：{len(high_value_users)/len(rfm_combined)*100:.2f}%")
+print()
+print("高价值用户列表（前10名）：")
+print(high_value_users[['用户ID', 'R_购买_score', 'F_购买_score', 'M_购买_score', 'RFM总分']].sort_values('RFM总分', ascending=False).head(10))
+print()
+
+# 高价值用户统计
+print("高价值用户平均特征：")
+print(high_value_users[['R_购买', 'F_购买', 'M_购买']].mean().round(2))
+print()
+
+# 验证
+assert 'RFM总分' in rfm_combined.columns, "总分计算缺失"
+print("✓ RFM用户价值分析完成！")
+`,
+    tips: ['R(Recency)：最近一次消费/加购时间，越近越好', 'F(Frequency)：消费/加购频次，越频繁越好', 'M(Monetary)：消费/加购金额，越多越好']
+  },
+  {
+    id: 'dcp-project-6',
+    chapterId: 'chapter-38',
+    title: '购物车商品价格敏感度分析（聚类前置）',
+    description: '发现价格弹性不同的用户群。计算每个用户的平均加购价格vs实际成交价格，计算价格敏感度，清洗极值。',
+    difficulty: '进阶',
+    skills: ['价格敏感度', '价格弹性', '用户行为分析', '数据清洗'],
+    initialCode: `import pandas as pd
+import numpy as np
+
+np.random.seed(42)
+
+# 生成商品数据
+products = pd.DataFrame({
+    '商品ID': range(1, 21),
+    '商品名称': [f'商品{i}' for i in range(1, 21)],
+    '原价': np.random.uniform(50, 500, 20).round(2),
+    '品类': np.random.choice(['食品', '电子产品', '服装', '家居'], 20)
+})
+
+# 生成加购和成交数据
+user_ids = list(range(1, 101))
+n_cart_records = 3000
+
+cart_records = []
+for _ in range(n_cart_records):
+    user_id = np.random.choice(user_ids)
+    product = products.sample(1).iloc[0]
+    product_id = product['商品ID']
+    original_price = product['原价']
+    
+    # 模拟不同用户对价格敏感度不同：有些用户经常等打折
+    if user_id < 30:
+        # 高价格敏感型：经常以高折扣购买
+        discount_factor = np.random.uniform(0.6, 0.8)
+    elif user_id < 70:
+        # 中等敏感：偶尔打折
+        discount_factor = np.random.uniform(0.8, 0.95)
+    else:
+        # 低敏感：基本不关心折扣
+        discount_factor = np.random.uniform(0.95, 1.0)
+    
+    actual_price = original_price * discount_factor
+    
+    # 是否最终购买
+    purchased = np.random.choice([0, 1], p=[0.2, 0.8])
+    
+    cart_records.append({
+        '用户ID': user_id,
+        '商品ID': product_id,
+        '原价': original_price,
+        '实付价': actual_price if purchased else np.nan,
+        '是否购买': purchased,
+        '折扣率': discount_factor if purchased else np.nan
+    })
+
+cart_df = pd.DataFrame(cart_records)
+print("购物车记录（前20行）：")
+print(cart_df.head(20))
+print()
+
+# 任务1：计算每个用户的平均加购价格vs实际成交价格
+print("="*60)
+print("任务1：按用户聚合统计价格信息")
+print("="*60)
+user_price_stats = cart_df.groupby('用户ID').agg({
+    '原价': ['count', 'mean'],  # 加购次数，平均加购原价
+    '实付价': ['count', 'mean'],  # 购买次数，平均实付价
+    '折扣率': 'mean'  # 平均折扣率
+}).reset_index()
+
+user_price_stats.columns = ['用户ID', '加购次数', '平均加购原价', '购买次数', '平均实付价', '平均折扣率']
+user_price_stats['购买率'] = user_price_stats['购买次数'] / user_price_stats['加购次数']
+user_price_stats = user_price_stats.fillna(0)
+
+print("用户价格统计（前20名）：")
+print(user_price_stats.head(20).round(4))
+print()
+
+# 任务2：计算价格敏感度
+print("="*60)
+print("任务2：计算价格敏感度")
+print("="*60)
+# 价格敏感度 = (平均加购原价 - 平均实付价) / 平均加购原价
+# 当没有购买记录时敏感度设为0.5（中等敏感）
+user_price_stats['价格敏感度'] = (user_price_stats['平均加购原价'] - user_price_stats['平均实付价']) / user_price_stats['平均加购原价']
+user_price_stats.loc[user_price_stats['购买次数'] == 0, '价格敏感度'] = 0.5
+
+print("用户价格敏感度（前20名）：")
+print(user_price_stats[['用户ID', '价格敏感度', '平均折扣率', '购买率']].head(20).round(4))
+print()
+
+# 任务3：清洗极值
+print("="*60)
+print("任务3：清洗极值")
+print("="*60)
+print(f"价格敏感度统计（清洗前）：")
+print(user_price_stats['价格敏感度'].describe())
+print()
+
+# 将价格敏感度限制在[0, 1]范围内
+user_price_stats['价格敏感度_clean'] = user_price_stats['价格敏感度'].clip(0, 1)
+print(f"价格敏感度统计（清洗后）：")
+print(user_price_stats['价格敏感度_clean'].describe())
+print()
+
+# 任务4：划分价格敏感度用户群
+print("="*60)
+print("任务4：划分价格敏感度用户群")
+print("="*60)
+user_price_stats['敏感度等级'] = pd.cut(
+    user_price_stats['价格敏感度_clean'],
+    bins=[-0.001, 0.2, 0.4, 0.6, 0.8, 1.001],
+    labels=['极不敏感', '较不敏感', '中等敏感', '较敏感', '极敏感']
+)
+
+sensitivity_distribution = user_price_stats['敏感度等级'].value_counts().sort_index()
+print("敏感度等级分布：")
+print(sensitivity_distribution)
+print()
+
+# 每个等级的平均购买率
+rate_by_sensitivity = user_price_stats.groupby('敏感度等级')['购买率'].mean().round(4)
+print("各敏感度等级的平均购买率：")
+print(rate_by_sensitivity)
+print()
+
+# 验证
+assert '价格敏感度_clean' in user_price_stats.columns, "敏感度清洗结果缺失"
+print("✓ 价格敏感度分析完成！")
+`,
+    tips: ['价格敏感度 = (原价 - 实付价) / 原价', '高敏感用户可能会等待促销才下单', '可以用敏感度来做个性化定价策略']
+  },
+  {
+    id: 'dcp-project-7',
+    chapterId: 'chapter-39',
+    title: 'K-Means聚类分析用户购物行为',
+    description: '核心数据分析技术。标准化特征，肘部法则确定K值，K-Means聚类并标记用户群，分析每个簇的特征解读。',
+    difficulty: '进阶',
+    skills: ['K-Means聚类', '特征标准化', '肘部法则', '用户分群'],
+    initialCode: `import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+np.random.seed(42)
+
+# 生成用户购物特征数据
+n_users = 200
+features = []
+
+for i in range(n_users):
+    if i < 50:
+        # 群体1：高消费、高放弃率、高价格敏感
+        total_spent = np.random.normal(3000, 500)
+        abandon_rate = np.random.uniform(0.5, 0.8)
+        avg_cart_items = np.random.normal(5, 1)
+        price_sensitivity = np.random.normal(0.7, 0.1)
+    elif i < 120:
+        # 群体2：中等消费、中等放弃率、中等敏感
+        total_spent = np.random.normal(1500, 300)
+        abandon_rate = np.random.uniform(0.2, 0.5)
+        avg_cart_items = np.random.normal(3, 0.8)
+        price_sensitivity = np.random.normal(0.4, 0.12)
+    else:
+        # 群体3：低消费、低放弃率、低敏感
+        total_spent = np.random.normal(500, 150)
+        abandon_rate = np.random.uniform(0.05, 0.2)
+        avg_cart_items = np.random.normal(2, 0.5)
+        price_sensitivity = np.random.normal(0.15, 0.08)
+    
+    features.append({
+        '用户ID': i + 1,
+        '购物车放弃率': max(abandon_rate, 0),
+        '平均加购数量': max(avg_cart_items, 1),
+        '价格敏感度': max(price_sensitivity, 0),
+        '总消费金额': max(total_spent, 100)
+    })
+
+df = pd.DataFrame(features)
+print("用户购物行为特征（前20行）：")
+print(df.head(20).round(4))
+print()
+
+# 任务1：标准化特征
+print("="*60)
+print("任务1：标准化特征")
+print("="*60)
+feature_cols = ['购物车放弃率', '平均加购数量', '价格敏感度', '总消费金额']
+X = df[feature_cols]
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+print("标准化后特征（前10行）：")
+print(pd.DataFrame(X_scaled, columns=feature_cols).head(10).round(4))
+print()
+
+# 任务2：肘部法则确定最佳K
+print("="*60)
+print("任务2：肘部法则确定最佳K")
+print("="*60)
+inertias = []
+k_range = range(2, 11)
+for k in k_range:
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    kmeans.fit(X_scaled)
+    inertias.append(kmeans.inertia_)
+
+print(f"K值对应的inertia：")
+for k, inertia in zip(k_range, inertias):
+    print(f"K={k}, inertia={inertia:.2f}")
+print()
+
+# 我们选择K=3
+# 任务3：K-Means聚类
+print("="*60)
+print("任务3：K-Means聚类（K=3）")
+print("="*60)
+best_k = 3
+kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+df['簇标签'] = kmeans.fit_predict(X_scaled)
+df['簇标签'] = df['簇标签'].astype(int)
+
+print(f"各簇样本数：")
+print(df['簇标签'].value_counts().sort_index())
+print()
+
+# 任务4：分析每个簇的特征
+print("="*60)
+print("任务4：分析每个簇的特征")
+print("="*60)
+cluster_centers = pd.DataFrame(
+    scaler.inverse_transform(kmeans.cluster_centers_),
+    columns=feature_cols,
+    index=[f'簇{i}' for i in range(best_k)]
+)
+print("簇中心特征：")
+print(cluster_centers.round(4))
+print()
+
+# 为每个簇命名
+cluster_names = {}
+for cluster_id in range(best_k):
+    center = cluster_centers.iloc[cluster_id]
+    if center['总消费金额'] > 2000:
+        cluster_names[cluster_id] = '高价值高敏感型'
+    elif center['总消费金额'] > 800:
+        cluster_names[cluster_id] = '中等价值平衡型'
+    else:
+        cluster_names[cluster_id] = '低价值价格不敏感型'
+
+df['用户群名称'] = df['簇标签'].map(cluster_names)
+print("用户群分布：")
+print(df['用户群名称'].value_counts())
+print()
+
+# 输出每个用户群的平均特征
+print("各用户群平均特征：")
+cluster_means = df.groupby('用户群名称')[feature_cols].mean().round(4)
+print(cluster_means)
+print()
+
+# 验证
+assert '簇标签' in df.columns, "聚类结果缺失"
+assert len(df['簇标签'].unique()) == best_k, "簇数量不正确"
+print("✓ K-Means聚类分析完成！")
+`,
+    tips: ['聚类前一定要标准化特征，否则量纲不同会导致结果偏差', '肘部法则通过inertia随K变化找到拐点确定最佳K', '聚类后一定要给每个簇赋予业务含义，解释各个群的特点']
+  },
+  {
+    id: 'dcp-project-8',
+    chapterId: 'chapter-40',
+    title: 'DBSCAN聚类识别异常购物车行为',
+    description: '核心数据分析技术（异常检测）。使用DBSCAN聚类，标记噪声点为"疑似机器人刷购物车"，对比噪声点与正常用户的行为差异。',
+    difficulty: '进阶',
+    skills: ['DBSCAN聚类', '异常检测', '行为分析', '噪声识别'],
+    initialCode: `import pandas as pd
+import numpy as np
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
+
+np.random.seed(42)
+
+# 生成购物车会话数据：包含正常用户和机器人/刷单用户
+n_normal = 500
+n_bot = 30
+
+# 正常用户特征
+normal_sessions = []
+for i in range(n_normal):
+    # 正常用户：加购频率适中，间隔适中
+    cart_count = np.random.poisson(lam=5)  # 平均加购5次
+    avg_interval = np.random.normal(loc=15, scale=5)  # 平均间隔15分钟
+    max_cart_size = np.random.randint(1, 8)  # 单次加购最多8件
+    
+    normal_sessions.append({
+        '会话ID': i + 1,
+        '加购频率': cart_count,
+        '平均加购间隔(分钟)': max(avg_interval, 1),
+        '单次最大加购数量': max_cart_size,
+        '是否异常': 0
+    })
+
+# 机器人用户特征
+bot_sessions = []
+for i in range(n_bot):
+    # 机器人用户：加购频率极高，间隔极短，每次加购数量巨大
+    cart_count = np.random.poisson(lam=25)  # 平均加购25次
+    avg_interval = np.random.normal(loc=2, scale=1)  # 平均间隔2分钟
+    max_cart_size = np.random.randint(50, 200)  # 单次加购50-200件
+    
+    bot_sessions.append({
+        '会话ID': n_normal + i + 1,
+        '加购频率': cart_count,
+        '平均加购间隔(分钟)': max(avg_interval, 0.1),
+        '单次最大加购数量': max_cart_size,
+        '是否异常': 1
+    })
+
+df = pd.DataFrame(normal_sessions + bot_sessions)
+print("购物车会话数据（前20行）：")
+print(df.head(20))
+print()
+print("数据统计：")
+print(df.describe().round(2))
+print()
+
+# 任务1：使用DBSCAN聚类
+print("="*60)
+print("任务1：使用DBSCAN聚类识别异常")
+print("="*60)
+
+feature_cols = ['加购频率', '平均加购间隔(分钟)', '单次最大加购数量']
+X = df[feature_cols]
+
+# 标准化
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# DBSCAN聚类（eps=0.5, min_samples=5）
+dbscan = DBSCAN(eps=0.5, min_samples=5)
+df['簇标签'] = dbscan.fit_predict(X_scaled)
+
+print(f"DBSCAN聚类结果：")
+print(f"噪声点标记为-1：{ (df['簇标签'] == -1).sum() } 个")
+print(f"簇分配情况：")
+print(df['簇标签'].value_counts())
+print()
+
+# 任务2：标记可疑用户
+print("="*60)
+print("任务2：标记疑似机器人刷购物车行为")
+print("="*60)
+df['是否可疑'] = (df['簇标签'] == -1).astype(int)
+
+print("可疑用户标记结果：")
+print(df.groupby('是否可疑').agg({
+    '会话ID': 'count',
+    '加购频率': 'mean',
+    '平均加购间隔(分钟)': 'mean',
+    '单次最大加购数量': 'mean'
+}).round(2))
+print()
+
+# 任务3：对比噪声点与正常用户的行为差异
+print("="*60)
+print("任务3：对比可疑用户与正常用户的差异")
+print("="*60)
+
+# 按DBSCAN标记分组
+group_stats = df.groupby('是否可疑').agg({
+    '加购频率': ['mean', 'min', 'max'],
+    '平均加购间隔(分钟)': ['mean', 'min', 'max'],
+    '单次最大加购数量': ['mean', 'min', 'max']
+}).round(2)
+
+print("各群体特征对比：")
+print(group_stats)
+print()
+
+# 输出可疑会话详情
+print("可疑会话详情（全部）：")
+suspicious_df = df[df['是否可疑'] == 1].sort_values('加购频率', ascending=False)
+print(suspicious_df[['会话ID', '加购频率', '平均加购间隔(分钟)', '单次最大加购数量', '簇标签']])
+print()
+
+# 验证
+print("="*60)
+print("验证结果")
+print("="*60)
+true_positives = ((df['是否异常'] == 1) & (df['是否可疑'] == 1)).sum()
+false_positives = ((df['是否异常'] == 0) & (df['是否可疑'] == 1)).sum()
+true_negatives = ((df['是否异常'] == 0) & (df['是否可疑'] == 0)).sum()
+false_negatives = ((df['是否异常'] == 1) & (df['是否可疑'] == 0)).sum()
+
+print(f"真正例（真异常且被标记为可疑）：{true_positives}")
+print(f"假正例（正常但被误判为可疑）：{false_positives}")
+print(f"真负例（正常且未误判）：{true_negatives}")
+print(f"假负例（真异常但未被标记）：{false_negatives}")
+print()
+
+precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
+recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+
+print(f"精确率：{precision:.2%}")
+print(f"召回率：{recall:.2%}")
+print()
+
+assert '是否可疑' in df.columns, "异常标记结果缺失"
+print("✓ DBSCAN异常检测完成！")
+`,
+    tips: ['DBSCAN不需要预先指定聚类数量，可以自动发现任意形状的簇', 'DBSCAN将噪声点标记为-1，这对于异常检测特别有用', 'eps和min_samples是DBSCAN的两个重要参数，需要根据数据分布调整']
+  },
+  {
+    id: 'dcp-project-9',
+    chapterId: 'chapter-41',
+    title: '购物车到下单的转化漏斗分析+时间序列聚类',
+    description: '分析用户从加购到转化的行为路径，并按时间模式聚类。计算每个session的完成率，提取时间序列特征，使用K-Means对转化速度模式聚类。',
+    difficulty: '进阶',
+    skills: ['转化漏斗', '时间序列', '聚类分析', '行为路径'],
+    initialCode: `import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+np.random.seed(42)
+
+# 生成用户会话行为数据
+n_sessions = 500
+
+sessions_data = []
+events_data = []
+
+for session_id in range(1, n_sessions + 1):
+    user_id = np.random.randint(1, 101)
+    start_time = datetime(2024, 1, 1) + timedelta(minutes=np.random.randint(0, 60*24*60))
+    
+    # 生成事件序列
+    events = []
+    
+    # 路径1：快速决策型（快速完成转化）
+    if session_id <= 150:
+        path = ['浏览商品', '加入购物车', '查看购物车', '结算', '支付成功']
+        path_times = [0, 1, 2, 5, 7]
+        path_taken = True
+    
+    # 路径2：犹豫型（多次查看、多次修改数量）
+    elif session_id <= 350:
+        path = ['浏览商品', '加入购物车', '查看购物车', '加入购物车', '修改数量', 
+                '查看购物车', '浏览其他商品', '返回购物车', '结算', '支付成功']
+        path_times = [0, 2, 3, 5, 6, 8, 12, 14, 18, 20]
+        path_taken = np.random.choice([True, False], p=[0.8, 0.2])
+    
+    # 路径3：流失型（加购后放弃）
+    else:
+        path = ['浏览商品', '加入购物车', '查看购物车']
+        path_times = [0, 2, 5]
+        path_taken = False
+    
+    for step, (event_type, minutes) in enumerate(zip(path, path_times)):
+        event_time = start_time + timedelta(minutes=minutes)
+        events_data.append({
+            '会话ID': session_id,
+            '用户ID': user_id,
+            '事件时间': event_time,
+            '事件类型': event_type,
+            '步骤': step + 1
+        })
+    
+    sessions_data.append({
+        '会话ID': session_id,
+        '用户ID': user_id,
+        '开始时间': start_time,
+        '总步骤': len(path),
+        '完成时间': timedelta(minutes=path_times[-1]) if path_taken else None,
+        '是否完成转化': path_taken,
+        '真实类型': '快速决策' if session_id <= 150 else ('犹豫型' if session_id <=350 else '流失型')
+    })
+
+sessions_df = pd.DataFrame(sessions_data)
+events_df = pd.DataFrame(events_data)
+
+print("会话数据（前20行）：")
+print(sessions_df.head(20))
+print()
+print("事件数据（前30行）：")
+print(events_df.head(30))
+print()
+
+# 任务1：计算每个session的完成率和转化漏斗
+print("="*60)
+print("任务1：计算转化漏斗")
+print("="*60)
+funnel_counts = events_df['事件类型'].value_counts().reindex([
+    '浏览商品', '加入购物车', '查看购物车', '修改数量', 
+    '浏览其他商品', '返回购物车', '结算', '支付成功'
+]).fillna(0)
+
+print("转化漏斗：")
+print(funnel_counts)
+print()
+
+# 任务2：转化分析
+print("="*60)
+print("任务2：整体转化分析")
+print("="*60)
+total_add_cart = (events_df['事件类型'] == '加入购物车').sum()
+total_payment = (events_df['事件类型'] == '支付成功').sum()
+
+print(f"加购 → 支付转化率：{total_payment / total_add_cart * 100:.2f}%")
+print(f"会话级完成率：{sessions_df['是否完成转化'].mean() * 100:.2f}%")
+print()
+
+# 任务3：提取时间序列特征并聚类
+print("="*60)
+print("任务3：提取特征并聚类")
+print("="*60)
+session_features = sessions_df.groupby('会话ID').agg({
+    '总步骤': 'first',
+    '是否完成转化': 'first'
+}).reset_index()
+
+# 计算每个会话的时长
+def calculate_session_duration(session_id):
+    session_events = events_df[events_df['会话ID'] == session_id].sort_values('事件时间')
+    if len(session_events) > 1:
+        first_time = session_events.iloc[0]['事件时间']
+        last_time = session_events.iloc[-1]['事件时间']
+        return (last_time - first_time).total_seconds() / 60
+    else:
+        return 0
+
+session_features['会话时长(分钟)'] = session_features['会话ID'].apply(calculate_session_duration)
+session_features['完成转化'] = session_features['是否完成转化'].astype(int)
+
+print("会话特征（前15名）：")
+print(session_features.head(15).round(2))
+print()
+
+# 使用K-Means对转化速度模式聚类
+feature_cols = ['总步骤', '会话时长(分钟)', '完成转化']
+X = session_features[feature_cols]
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
+session_features['簇标签'] = kmeans.fit_predict(X_scaled)
+session_features['簇标签'] = session_features['簇标签'].astype(int)
+
+# 任务4：分析不同聚类组的转化情况
+print("="*60)
+print("任务4：分析不同聚类组的转化情况")
+print("="*60)
+cluster_stats = session_features.groupby('簇标签').agg({
+    '会话ID': 'count',
+    '总步骤': 'mean',
+    '会话时长(分钟)': 'mean',
+    '完成转化': 'mean'
+}).round(2)
+cluster_stats.columns = ['会话数', '平均步骤数', '平均会话时长(分钟)', '平均转化率']
+
+print("各聚类组统计：")
+print(cluster_stats)
+print()
+
+# 验证
+assert '簇标签' in session_features.columns, "聚类结果缺失"
+print("✓ 转化漏斗与时间序列聚类分析完成！")
+`,
+    tips: ['转化漏斗可以清晰看到用户在哪个环节流失最多', '可以通过聚类找到不同的用户行为模式', '对于不同的行为模式，可能需要不同的干预策略']
+  },
+  {
+    id: 'dcp-project-10',
+    chapterId: 'chapter-42',
+    title: '端到端综合项目 - 电商购物车智能分析报告',
+    description: '整合所有技术：数据采集→清洗→购物车分析→聚类→业务建议。完成购物车放弃率分析、关联规则挖掘、K-Means聚类，生成带图表的分析报告。',
+    difficulty: '综合',
+    skills: ['端到端分析', '综合项目', '报告生成', '业务建议'],
+    initialCode: `import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import silhouette_score
+
+print("="*70)
+print("电商购物车智能分析报告")
+print("="*70)
+print()
+print(f"报告生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print()
+
+# ===================== 1. 数据生成与加载 =====================
+print("="*70)
+print("1. 数据生成与加载")
+print("="*70)
+
+np.random.seed(42)
+n_users = 300
+n_records = 5000
+
+# 商品表
+products = pd.DataFrame({
+    '商品ID': range(1, 21),
+    '商品名称': [f'商品{i}' for i in range(1, 21)],
+    '原价': np.random.uniform(50, 800, 20).round(2),
+    '品类': np.random.choice(['食品', '电子产品', '服装', '家居'], 20)
+})
+
+# 用户行为记录表
+behavior_records = []
+for _ in range(n_records):
+    user_id = np.random.randint(1, n_users + 1)
+    product = products.sample(1).iloc[0]
+    action_time = datetime(2024, 1, 1) + timedelta(minutes=np.random.randint(0, 60*24*60))
+    action_type = np.random.choice(['浏览', '加购', '结算', '支付成功'], p=[0.4, 0.3, 0.15, 0.15])
+    
+    behavior_records.append({
+        '用户ID': user_id,
+        '商品ID': product['商品ID'],
+        '行为时间': action_time,
+        '行为类型': action_type,
+        '商品价格': product['原价']
+    })
+
+df_behavior = pd.DataFrame(behavior_records)
+
+print(f"加载数据完成，共{len(df_behavior)}条记录")
+print("数据前15行：")
+print(df_behavior.head(15))
+print()
+
+# ===================== 2. 数据清洗与预处理 =====================
+print("="*70)
+print("2. 数据清洗与预处理")
+print("="*70)
+
+initial_count = len(df_behavior)
+df_clean = df_behavior.dropna().copy()
+duplicates = df_clean.duplicated().sum()
+df_clean = df_clean.drop_duplicates()
+
+print(f"原始行数：{initial_count}")
+print(f"删除缺失值后：{len(df_clean)}")
+print(f"删除重复值后：{len(df_clean)}")
+print(f"删除行数：{initial_count - len(df_clean)}")
+print()
+
+# ===================== 3. 购物车放弃率分析 =====================
+print("="*70)
+print("3. 购物车放弃率分析")
+print("="*70)
+
+# 按用户统计
+user_summary = df_clean.groupby('用户ID').agg({
+    '行为类型': lambda x: list(x),
+    '商品价格': ['count', 'sum']
+}).reset_index()
+user_summary.columns = ['用户ID', '行为序列', '总操作数', '总商品价格']
+
+# 简化：如果一个用户有加购记录但没有支付记录则视为放弃
+def has_abandon(actions):
+    has_cart = '加购' in actions
+    has_payment = '支付成功' in actions
+    return has_cart and not has_payment
+
+user_summary['是否放弃'] = user_summary['行为序列'].apply(has_abandon)
+
+abandon_rate = user_summary['是否放弃'].mean()
+print(f"整体用户放弃率：{abandon_rate*100:.2f}%")
+print()
+
+# 时间分析
+df_clean['小时'] = df_clean['行为时间'].dt.hour
+hour_abandon = df_clean[df_clean['行为类型'] == '加购'].groupby('小时').agg({
+    '用户ID': 'count'
+})
+hour_purchase = df_clean[df_clean['行为类型'] == '支付成功'].groupby('小时').agg({
+    '用户ID': 'count'
+})
+
+hour_stats = pd.DataFrame({
+    '加购数': hour_abandon['用户ID'],
+    '支付数': hour_purchase['用户ID']
+}).fillna(0)
+hour_stats['放弃率'] = 1 - hour_stats['支付数'] / hour_stats['加购数']
+
+print("小时级放弃率（前12小时）：")
+print(hour_stats.head(12).round(4))
+print()
+
+# ===================== 4. 关联规则挖掘 =====================
+print("="*70)
+print("4. 关联规则挖掘（简化版）")
+print("="*70)
+
+# 获取有支付记录的用户
+paid_users = df_clean[df_clean['行为类型'] == '支付成功']['用户ID'].unique()
+cart_for_paid = df_clean[(df_clean['用户ID'].isin(paid_users)) & 
+                          (df_clean['行为类型'] == '加购')]
+
+product_baskets = cart_for_paid.groupby('用户ID')['商品ID'].apply(list).reset_index()
+product_baskets.columns = ['用户ID', '商品ID列表']
+
+# 计算共现
+co_occur = np.zeros((20, 20), dtype=int)
+for items in product_baskets['商品ID列表']:
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            prod_i = items[i] - 1
+            prod_j = items[j] - 1
+            co_occur[prod_i][prod_j] += 1
+            co_occur[prod_j][prod_i] += 1
+
+print("商品共现矩阵（前10x10）：")
+print(co_occur[:10, :10])
+print()
+
+# ===================== 5. K-Means用户聚类 =====================
+print("="*70)
+print("5. K-Means用户聚类")
+print("="*70)
+
+# 构建特征
+user_features = df_clean.groupby('用户ID').agg({
+    '商品ID': 'nunique',  # 浏览商品数
+    '行为类型': 'count',   # 总行为数
+    '商品价格': 'sum'     # 总金额
+}).reset_index()
+user_features.columns = ['用户ID', '浏览商品数', '总行为数', '总金额']
+
+# 计算放弃率（简化版）
+abandon_dict = dict(zip(user_summary['用户ID'], user_summary['是否放弃'].astype(int)))
+user_features['放弃率'] = user_features['用户ID'].map(abandon_dict).fillna(0)
+
+# 标准化与聚类
+feature_cols = ['浏览商品数', '总行为数', '总金额', '放弃率']
+X = user_features[feature_cols]
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+kmeans = KMeans(n_clusters=3, random_state=42, n_init=10)
+user_features['簇标签'] = kmeans.fit_predict(X_scaled)
+
+# 计算轮廓系数
+sil_score = silhouette_score(X_scaled, user_features['簇标签'])
+print(f"聚类轮廓系数：{sil_score:.4f}")
+print()
+
+# 聚类结果统计
+cluster_stats = user_features.groupby('簇标签').agg({
+    '用户ID': 'count',
+    '浏览商品数': 'mean',
+    '总行为数': 'mean',
+    '总金额': 'mean',
+    '放弃率': 'mean'
+}).round(2)
+cluster_stats.columns = ['用户数', '平均浏览商品数', '平均行为数', '平均金额', '平均放弃率']
+
+print("各簇统计：")
+print(cluster_stats)
+print()
+
+# ===================== 6. 业务建议 =====================
+print("="*70)
+print("6. 业务建议")
+print("="*70)
+
+print("基于分析结果，我们建议：")
+print("1. 针对高放弃率时段（如凌晨和深夜）进行优化，提供限时折扣")
+print("2. 利用关联规则结果，进行购物车推荐和捆绑销售")
+print("3. 针对不同聚类用户群体进行个性化营销和定价策略")
+print("4. 对高价值低敏感群体减少促销活动，对高敏感群体增加促销通知")
+print()
+
+print("="*70)
+print("✓ 端到端分析报告生成完成！")
+print("="*70)
+`,
+    tips: ['端到端项目要注意整个流程的完整性和可复现性', '报告要简洁明了，结论要有数据支持', '业务建议要具体且可落地']
   }
 ];
 

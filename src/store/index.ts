@@ -453,6 +453,106 @@ const mockChapters: Chapter[] = [
     studyDurationMinutes: 180,
     keyPoints: ['价格弹性', '用户分群', '折扣分析', '价值验证'],
     hasCodePractice: true
+  },
+  {
+    id: 'chapter-33',
+    courseId: 'course-3',
+    title: '项目1：电商用户购物车行为数据清洗',
+    content: '掌握Pandas处理缺失值、重复值、异常值、格式规范化。处理缺失的用户ID和负数数量，去重，转换时间列，筛选加购但未下单数据。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['数据清洗', '缺失值处理', '异常值检测', '格式转换'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-34',
+    courseId: 'course-3',
+    title: '项目2：Web爬取动态商品价格数据并清洗',
+    content: '使用requests+BeautifulSoup爬取电商网站商品标题、价格、评价数。解析HTML，提取数值，清洗价格，统一评价数单位。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['网络爬虫', '数据采集', 'HTML解析', '数据清洗'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-35',
+    courseId: 'course-3',
+    title: '项目3：购物车关联规则分析（Apriori算法准备）',
+    content: '购物车分析的经典场景——找出"经常一起购买"的商品。按订单ID聚合为购物篮，生成0-1矩阵，计算支持度、置信度、提升度。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['关联规则', 'Apriori算法', '支持度', '置信度'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-36',
+    courseId: 'course-3',
+    title: '项目4：用户购物车放弃率分析与预测特征构建',
+    content: '分析加购后未下单的原因。合并购物车表+用户行为日志，计算加购到下单的时间差，创建特征，按用户聚合统计历史放弃率。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['放弃率分析', '特征工程', '用户行为分析', '数据合并'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-37',
+    courseId: 'course-3',
+    title: '项目5：RFM用户价值分析（基于购买和加购）',
+    content: '将购物车数据转化为用户分层。计算RFM三个维度，分箱并打分，识别高价值用户。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['RFM模型', '用户分层', '价值分析', '分箱操作'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-38',
+    courseId: 'course-3',
+    title: '项目6：购物车商品价格敏感度分析（聚类前置）',
+    content: '发现价格弹性不同的用户群。计算每个用户的平均加购价格vs实际成交价格，计算价格敏感度，清洗极值。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['价格敏感度', '价格弹性', '用户行为分析', '数据清洗'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-39',
+    courseId: 'course-3',
+    title: '项目7：K-Means聚类分析用户购物行为',
+    content: '核心数据分析技术。标准化特征，肘部法则确定K值，K-Means聚类并标记用户群，分析每个簇的特征解读。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['K-Means聚类', '特征标准化', '肘部法则', '用户分群'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-40',
+    courseId: 'course-3',
+    title: '项目8：DBSCAN聚类识别异常购物车行为',
+    content: '核心数据分析技术（异常检测）。使用DBSCAN聚类，标记噪声点为"疑似机器人刷购物车"，对比噪声点与正常用户的行为差异。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['DBSCAN聚类', '异常检测', '行为分析', '噪声识别'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-41',
+    courseId: 'course-3',
+    title: '项目9：购物车到下单的转化漏斗分析+时间序列聚类',
+    content: '分析用户从加购到转化的行为路径，并按时间模式聚类。计算每个session的完成率，提取时间序列特征，使用K-Means对转化速度模式聚类。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['转化漏斗', '时间序列', '聚类分析', '行为路径'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-42',
+    courseId: 'course-3',
+    title: '项目10：端到端综合项目 - 电商购物车智能分析报告',
+    content: '整合所有技术：数据采集→清洗→购物车分析→聚类→业务建议。完成购物车放弃率分析、关联规则挖掘、K-Means聚类，生成带图表的分析报告。',
+    isCompleted: false,
+    studyDurationMinutes: 240,
+    keyPoints: ['端到端分析', '综合项目', '报告生成', '业务建议'],
+    hasCodePractice: true
   }
 ];
 
