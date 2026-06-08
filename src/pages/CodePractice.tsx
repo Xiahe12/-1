@@ -5821,207 +5821,107 @@ print("✓ 预测性补货与安全库存计算完成！")
     description: 'Pandas数据清洗、缺失值/异常值处理、数据类型转换、基础统计透视。给定零售订单CSV（含订单ID、日期、金额、数量、区域），完成去重、格式统一、缺失填补，计算月销售额、各区域总销售，输出销售趋势折线图与区域柱状图。',
     difficulty: '基础',
     skills: ['数据清洗', '缺失值处理', '统计透视', '数据可视化'],
-    initialCode: `import pandas as pd
+    initialCode: `# ========== 项目1：销售数据清洗与基础BI看板 ==========
+import pandas as pd
 import numpy as np
-from datetime import datetime
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# 1. 生成模拟零售订单数据
+# 1. 生成示例数据
 np.random.seed(42)
-n_orders = 1000
+dates = pd.date_range('2024-01-01', '2024-12-31', freq='D')
+n_orders = 5000
 
-regions = ['华东', '华南', '华北', '华中', '西南', '西北']
-order_data = []
+data = {
+    'Order_ID': [f'ORD_{i}' for i in range(1, n_orders+1)],
+    'Date': np.random.choice(dates, n_orders),
+    'Region': np.random.choice(['North', 'South', 'East', 'West'], n_orders, p=[0.3, 0.2, 0.25, 0.25]),
+    'Amount': np.random.normal(500, 200, n_orders),
+    'Quantity': np.random.poisson(3, n_orders)
+}
+df = pd.DataFrame(data)
 
-for i in range(n_orders):
-    order_id = f'ORD{str(i+1).zfill(6)}'
-    # 随机日期（2024年）
-    days_offset = np.random.randint(0, 365)
-    order_date = datetime(2024, 1, 1) + pd.Timedelta(days=days_offset)
-    region = np.random.choice(regions)
-    amount = np.random.uniform(50, 2000)
-    quantity = np.random.randint(1, 20)
-    
-    order_data.append({
-        '订单ID': order_id,
-        '日期': order_date,
-        '区域': region,
-        '金额': amount,
-        '数量': quantity
-    })
+# 人为添加缺失值和异常值
+df.loc[10:20, 'Amount'] = np.nan
+df.loc[30, 'Quantity'] = 100
+df.loc[100:105, 'Region'] = None
+df.loc[200, 'Date'] = pd.NaT
 
-df = pd.DataFrame(order_data)
-
-# 引入数据问题
-# 1. 缺失值
-df.loc[np.random.choice(n_orders, 50), '金额'] = np.nan
-df.loc[np.random.choice(n_orders, 30), '数量'] = np.nan
-df.loc[np.random.choice(n_orders, 20), '区域'] = np.nan
-# 2. 重复数据
-df = pd.concat([df, df.sample(50, random_state=42)], ignore_index=True)
-# 3. 异常值
-df.loc[np.random.choice(len(df), 10), '金额'] = np.random.uniform(5000, 10000, 10)
-df.loc[np.random.choice(len(df), 5), '数量'] = np.random.randint(-10, 0, 5)
-
-print("="*60)
-print("原始数据概览")
-print("="*60)
-print(f"原始行数：{len(df)}")
-print("\\n缺失值统计：")
-print(df.isnull().sum())
-print("\\n前10行数据：")
-print(df.head(10))
-print()
+print("=== 原始数据信息 ===")
+print(df.info())
+print(f"
+缺失值统计：
+{df.isnull().sum()}")
 
 # 2. 数据清洗
-print("="*60)
-print("数据清洗")
-print("="*60)
+df = df.drop_duplicates(subset=['Order_ID'])
 
-# 删除重复订单
-df_clean = df.drop_duplicates(subset=['订单ID']).copy()
-print(f"去重后行数：{len(df_clean)}（删除{len(df) - len(df_clean)}行重复）")
+# 处理缺失值
+df['Amount'].fillna(df['Amount'].median(), inplace=True)
+df['Region'].fillna(df['Region'].mode()[0], inplace=True)
+df['Date'].fillna(df['Date'].mode()[0], inplace=True)
 
-# 处理缺失值 - 填充
-df_clean['金额'] = df_clean['金额'].fillna(df_clean['金额'].median())
-df_clean['数量'] = df_clean['数量'].fillna(df_clean['数量'].median())
-df_clean['区域'] = df_clean['区域'].fillna('未知')
+# 处理异常值（使用IQR方法）
+Q1 = df['Amount'].quantile(0.25)
+Q3 = df['Amount'].quantile(0.75)
+IQR = Q3 - Q1
+df = df[(df['Amount'] >= Q1 - 1.5*IQR) & (df['Amount'] <= Q3 + 1.5*IQR)]
 
-# 剔除异常值
-df_clean = df_clean[df_clean['金额'] > 0]
-df_clean = df_clean[df_clean['数量'] > 0]
-print(f"剔除异常后行数：{len(df_clean)}")
-print()
+# 限制Quantity合理范围
+df = df[(df['Quantity'] >= 1) & (df['Quantity'] <= 20)]
 
-# 转换日期格式
-df_clean['日期'] = pd.to_datetime(df_clean['日期'])
-df_clean['月份'] = df_clean['日期'].dt.month
-df_clean['年份'] = df_clean['日期'].dt.year
+# 转换数据类型
+df['Date'] = pd.to_datetime(df['Date'])
+df['Month'] = df['Date'].dt.to_period('M')
 
-print("="*60)
-print("验证数据清洗结果")
-print("="*60)
-print(f"最终行数：{len(df_clean)}")
-print(f"缺失值总数：{df_clean.isnull().sum().sum()}")
-assert df_clean.isnull().sum().sum() == 0, "仍有缺失值"
-print()
+# 验证
+assert df.isnull().sum().sum() == 0, "仍有缺失值存在"
+print(f"
+清洗后数据形状：{df.shape}")
+print(f"缺失值总数：{df.isnull().sum().sum()}")
 
-# 3. 基础统计分析 - BI看板核心指标
-print("="*60)
-print("BI看板核心指标")
-print("="*60)
+# 3. 数据分析
+# 月度销售额
+monthly_sales = df.groupby('Month')['Amount'].sum()
+# 区域销售额
+region_sales = df.groupby('Region')['Amount'].sum()
 
-# 总销售
-total_sales = df_clean['金额'].sum()
-total_orders = len(df_clean)
-total_quantity = df_clean['数量'].sum()
-avg_order_value = df_clean['金额'].mean()
-
-print(f"总销售额：¥{total_sales:,.2f}")
-print(f"总订单数：{total_orders}")
-print(f"总销售数量：{total_quantity}")
-print(f"平均订单金额：¥{avg_order_value:.2f}")
-print()
-
-# 4. 月度销售趋势分析
-print("="*60)
-print("月度销售趋势")
-print("="*60)
-
-monthly_sales = df_clean.groupby('月份').agg({
-    '订单ID': 'count',
-    '金额': 'sum',
-    '数量': 'sum'
-}).reset_index()
-monthly_sales.columns = ['月份', '订单数', '销售额', '销售数量']
-
-print("月度销售数据：")
-print(monthly_sales)
-print()
-
-# 计算环比增长率
-monthly_sales['销售额环比增长'] = monthly_sales['销售额'].pct_change() * 100
-print("月度销售额趋势（带环比）：")
-print(monthly_sales[['月份', '销售额', '销售额环比增长']].round(2))
-print()
-
-# 5. 区域销售分析
-print("="*60)
-print("区域销售分析")
-print("="*60)
-
-region_sales = df_clean.groupby('区域').agg({
-    '订单ID': 'count',
-    '金额': 'sum',
-    '数量': 'sum'
-}).reset_index()
-region_sales.columns = ['区域', '订单数', '销售额', '销售数量']
-region_sales['平均订单金额'] = region_sales['销售额'] / region_sales['订单数']
-region_sales = region_sales.sort_values('销售额', ascending=False)
-
-print("区域销售排名：")
+print("
+=== 月度销售额 ===")
+print(monthly_sales.head())
+print("
+=== 区域销售额 ===")
 print(region_sales)
-print()
 
-# 区域销售占比
-region_sales['销售占比'] = (region_sales['销售额'] / total_sales * 100).round(2)
-print("区域销售占比：")
-for _, row in region_sales.iterrows():
-    print(f"  {row['区域']}: {row['销售占比']:.1f}% (¥{row['销售额']:,.0f})")
-print()
+# 4. 可视化
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# 6. 数据透视表
-print("="*60)
-print("数据透视表：区域 × 月份 销售额")
-print("="*60)
+# 销售趋势折线图
+monthly_sales.plot(ax=axes[0], marker='o', color='steelblue')
+axes[0].set_title('月度销售趋势', fontsize=14)
+axes[0].set_xlabel('月份')
+axes[0].set_ylabel('销售额')
+axes[0].grid(True, alpha=0.3)
 
-pivot_table = df_clean.pivot_table(
-    values='金额',
-    index='区域',
-    columns='月份',
-    aggfunc='sum',
-    fill_value=0
-)
-print(pivot_table.round(0))
-print()
+# 区域销售柱状图
+region_sales.plot(kind='bar', ax=axes[1], color=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'])
+axes[1].set_title('区域销售额对比', fontsize=14)
+axes[1].set_xlabel('区域')
+axes[1].set_ylabel('销售额')
+axes[1].tick_params(axis='x', rotation=0)
 
-# 7. 可视化数据准备（模拟图表输出）
-print("="*60)
-print("可视化数据准备")
-print("="*60)
+plt.tight_layout()
+plt.show()
 
-print("销售趋势数据（用于折线图）：")
-print("月份:", monthly_sales['月份'].tolist())
-print("销售额:", monthly_sales['销售额'].round(0).tolist())
-print()
-
-print("区域柱状图数据：")
-print(region_sales[['区域', '销售额', '销售占比']])
-print()
-
-# 8. 业务洞察
-print("="*60)
-print("业务洞察")
-print("="*60)
-
-# 找出销售额最高和最低的区域
-top_region = region_sales.iloc[0]
-low_region = region_sales.iloc[-1]
-
-print(f"1. 销售冠军区域：{top_region['区域']}（销售额：¥{top_region['销售额']:,.0f}）")
-print(f"2. 销售最低区域：{low_region['区域']}（销售额：¥{low_region['销售额']:,.0f}）")
-print(f"3. 最旺月份：{monthly_sales.loc[monthly_sales['销售额'].idxmax(), '月份']}月")
-print(f"4. 最淡月份：{monthly_sales.loc[monthly_sales['销售额'].idxmin(), '月份']}月")
-print()
-
-# 9. 验证
-print("="*60)
-print("数据验证")
-print("="*60)
-assert df_clean.isnull().sum().sum() == 0, "仍有缺失值"
-assert len(df_clean) > 0, "清洗后数据为空"
-assert df_clean['金额'].min() > 0, "仍有无效金额"
-print("✓ 数据清洗完成，所有验证通过！")
-print("✓ BI看板基础分析完成！")
+# 5. 输出关键指标
+print("
+=== 关键业务指标 ===")
+print(f"总销售额：¥{df['Amount'].sum():,.0f}")
+print(f"总订单数：{len(df)}")
+print(f"平均客单价：¥{df['Amount'].mean():.0f}")
+print(f"平均每单数量：{df['Quantity'].mean():.1f}")
+print(f"最高销售月份：{monthly_sales.idxmax()}，销售额：¥{monthly_sales.max():,.0f}")
+print(f"最佳销售区域：{region_sales.idxmax()}，销售额：¥{region_sales.max():,.0f}")
 `,
     tips: ['数据清洗是BI分析的基础，要确保数据质量', '透视表是快速发现数据规律的好工具', '结合时间维度和区域维度可以发现更多业务洞察']
   },
@@ -6032,118 +5932,127 @@ print("✓ BI看板基础分析完成！")
     description: '购物篮分析、事务编码、频繁项集、关联规则（置信度/支持度）。数据含Transaction_ID与Product，清洗掉单件商品订单，转换为购物车矩阵，使用mlxtend计算频繁项集与规则。',
     difficulty: '进阶',
     skills: ['关联规则', 'Apriori算法', '购物篮分析'],
-    initialCode: `# ========== 1. 生成示例数据（模拟购物篮） ==========
+    initialCode: `# ========== 项目2：购物车分析（关联规则Apriori） ==========
 import pandas as pd
 import numpy as np
 from mlxtend.frequent_patterns import apriori, association_rules
+import matplotlib.pyplot as plt
 
-# 生成1000条交易记录（每条记录包含多个商品）
+# 1. 生成购物篮数据
 np.random.seed(42)
+products = ['牛奶', '面包', '黄油', '鸡蛋', '啤酒', '尿布', '可乐', '薯片', '巧克力', '水果']
+
+# 构建有意义的关联：啤酒→尿布，牛奶→面包
 transactions = []
-products = ['牛奶', '面包', '黄油', '鸡蛋', '啤酒', '尿布', '可乐', '薯片']
+for _ in range(2000):
+    basket = []
+    # 随机基础商品
+    base = np.random.choice(products[:6], size=np.random.randint(2, 4), replace=False).tolist()
+    basket.extend(base)
+    
+    # 有意添加强关联对
+    if '啤酒' in basket and np.random.random() > 0.3:
+        basket.append('尿布')
+    if '牛奶' in basket and np.random.random() > 0.4:
+        basket.append('面包')
+    if '鸡蛋' in basket and np.random.random() > 0.5:
+        basket.append('黄油')
+    
+    # 添加随机额外商品
+    extra = np.random.choice(products[6:], size=np.random.randint(0, 2), replace=False).tolist()
+    basket.extend(extra)
+    
+    transactions.append(list(set(basket)))  # 去重
 
-for _ in range(1000):
-    # 每个购物篮随机包含2-5个商品
-    basket = np.random.choice(products, size=np.random.randint(2,6), replace=False).tolist()
-    transactions.append(basket)
-
-# 转换为DataFrame格式（Transaction_ID + Product）
+# 转换为DataFrame
 df = pd.DataFrame([(i, prod) for i, basket in enumerate(transactions) for prod in basket],
                   columns=['Transaction_ID', 'Product'])
 
-print("原始数据前10行：")
-print(df.head())
-print(f"\\n总交易数：{df['Transaction_ID'].nunique()}")
-print(f"总商品种类：{df['Product'].nunique()}")
+print(f"数据规模：{len(df)}条记录，{df['Transaction_ID'].nunique()}个交易，{df['Product'].nunique()}种商品")
 
-# ========== 2. 数据清洗 ==========
-# 删除空值（如果有）
-df.dropna(inplace=True)
-
-# 检查每个交易的商品数量分布
+# 2. 数据清洗（过滤小购物篮）
 basket_sizes = df.groupby('Transaction_ID').size()
-print(f"\\n购物篮大小统计：最小{basket_sizes.min()}，最大{basket_sizes.max()}，平均{basket_sizes.mean():.1f}")
+valid_trans = basket_sizes[basket_sizes >= 2].index
+df = df[df['Transaction_ID'].isin(valid_trans)]
 
-# 过滤掉单件商品订单（可选，关联规则通常需要多商品）
-# 这里保留所有交易，因为数据生成时最小为2件
+print(f"过滤单件商品后：剩余{df['Transaction_ID'].nunique()}个交易")
 
-# ========== 3. 转换为购物车矩阵（One-Hot编码） ==========
-# 方法：使用pd.crosstab 或 pivot_table
+# 3. 转换为购物车矩阵
 basket_matrix = pd.crosstab(df['Transaction_ID'], df['Product']).astype(bool)
 
-print(f"\\n购物车矩阵形状：{basket_matrix.shape}（{basket_matrix.shape[0]}个交易 × {basket_matrix.shape[1]}个商品）")
-print("\\n矩阵前5行：")
-print(basket_matrix.head())
+print(f"购物车矩阵：{basket_matrix.shape}")
 
-# ========== 4. 挖掘频繁项集 ==========
-# 设置最小支持度（例如3%，即至少出现在30个交易中）
-min_support = 0.03
+# 4. 挖掘频繁项集
+min_support = 0.02  # 至少出现在2%的交易中
 frequent_itemsets = apriori(basket_matrix, min_support=min_support, use_colnames=True)
 
-print(f"\\n频繁项集（支持度≥{min_support}）：")
+# 添加项集长度
+frequent_itemsets['length'] = frequent_itemsets['itemsets'].apply(lambda x: len(x))
+frequent_itemsets = frequent_itemsets[frequent_itemsets['length'] >= 2]  # 只保留2项及以上
+
+print(f"
+频繁项集数量：{len(frequent_itemsets)}")
 print(frequent_itemsets.sort_values('support', ascending=False).head(10))
 
-# ========== 5. 生成关联规则 ==========
-# 设置最小置信度
-min_confidence = 0.5
-rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=min_confidence)
+# 5. 生成关联规则
+rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=0.4)
 
-# 添加提升度（Lift）列
-rules['lift'] = rules['lift']
+# 添加规则描述
+rules['antecedents_str'] = rules['antecedents'].apply(lambda x: ', '.join(list(x)))
+rules['consequents_str'] = rules['consequents'].apply(lambda x: ', '.join(list(x)))
 
-print(f"\\n关联规则（置信度≥{min_confidence}）：")
-print(rules[['antecedents', 'consequents', 'support', 'confidence', 'lift']].head(10))
+print(f"
+关联规则数量：{len(rules)}")
 
-# ========== 6. 筛选有意义的规则（提升度 > 1.2） ==========
-meaningful_rules = rules[rules['lift'] > 1.2].sort_values('lift', ascending=False)
+# 筛选高质量规则（提升度>1.2且置信度>0.5）
+high_quality_rules = rules[(rules['lift'] > 1.2) & (rules['confidence'] > 0.5)].sort_values('lift', ascending=False)
 
-print("\\n\\n=== 最有价值的关联规则（提升度>1.2） ===")
-if len(meaningful_rules) > 0:
-    for idx, row in meaningful_rules.head(5).iterrows():
-        ante = ', '.join(list(row['antecedents']))
-        cons = ', '.join(list(row['consequents']))
-        print(f"如果顾客购买【{ante}】→ 也很可能购买【{cons}】")
-        print(f"  支持度: {row['support']:.3f}, 置信度: {row['confidence']:.3f}, 提升度: {row['lift']:.2f}\\n")
-else:
-    print("未找到提升度>1.2的规则，尝试降低阈值或增加数据量")
+print("
+=== 高质量关联规则 ===")
+for _, row in high_quality_rules.head(10).iterrows():
+    print(f"{row['antecedents_str']} → {row['consequents_str']}")
+    print(f"  支持度: {row['support']:.3f}, 置信度: {row['confidence']:.3f}, 提升度: {row['lift']:.2f}
+")
 
-# ========== 7. 代码验证 ==========
-# 验证1：检查支持度是否在范围内
-assert frequent_itemsets['support'].between(0, 1).all(), "支持度超出[0,1]范围"
+# 6. 验证计算
+def verify_rule(df, product_a, product_b):
+    # 手动验证关联规则
+    trans_a = set(df[df['Product']==product_a]['Transaction_ID'].unique())
+    trans_b = set(df[df['Product']==product_b]['Transaction_ID'].unique())
+    both = len(trans_a & trans_b)
+    only_a = len(trans_a)
+    confidence = both / only_a if only_a > 0 else 0
+    return confidence
 
-# 验证2：置信度验证
-assert rules['confidence'].between(0, 1).all(), "置信度超出[0,1]范围"
+if len(high_quality_rules) > 0:
+    test_rule = high_quality_rules.iloc[0]
+    ante = list(test_rule['antecedents'])[0]
+    cons = list(test_rule['consequents'])[0]
+    manual_conf = verify_rule(df, ante, cons)
+    print(f"验证规则【{ante}→{cons}】：算法置信度={test_rule['confidence']:.3f}，手动计算={manual_conf:.3f}")
+    assert abs(test_rule['confidence'] - manual_conf) < 0.01, "计算不一致"
 
-# 验证3：提升度>1.2的规则数量
-print(f"\\n验证通过：共找到{len(meaningful_rules)}条提升度>1.2的规则")
+# 7. 可视化
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# 验证4：手动计算一条规则验证算法正确性
-# 例如：购买{牛奶}→{面包}的置信度 = 同时购买数 / 购买牛奶数
-milk_bread = len(df[df['Product'] == '牛奶']['Transaction_ID'].unique() & 
-                  set(df[df['Product'] == '面包']['Transaction_ID'].unique()))
-milk = len(df[df['Product'] == '牛奶']['Transaction_ID'].unique())
-manual_conf = milk_bread / milk if milk > 0 else 0
-print(f"手动验证【牛奶→面包】置信度: {manual_conf:.3f}")
+# 散点图：支持度 vs 置信度
+scatter = axes[0].scatter(rules['support'], rules['confidence'], 
+                          c=rules['lift'], cmap='RdYlGn', alpha=0.6, s=50)
+axes[0].set_xlabel('支持度')
+axes[0].set_ylabel('置信度')
+axes[0].set_title('关联规则分布（颜色=提升度）')
+plt.colorbar(scatter, ax=axes[0])
 
-# ========== 8. 简单可视化（可选） ==========
-import matplotlib.pyplot as plt
+# 柱状图：Top10规则提升度
+top_lift = high_quality_rules.head(10)
+axes[1].barh(range(len(top_lift)), top_lift['lift'].values)
+axes[1].set_yticks(range(len(top_lift)))
+axes[1].set_yticklabels([f"{a}→{c}" for a, c in zip(top_lift['antecedents_str'], top_lift['consequents_str'])])
+axes[1].set_xlabel('提升度')
+axes[1].set_title('Top10关联规则（按提升度排序）')
 
-# 绘制支持度-置信度散点图
-plt.figure(figsize=(10, 6))
-plt.scatter(rules['support'], rules['confidence'], c=rules['lift'], cmap='viridis', alpha=0.6)
-plt.colorbar(label='提升度')
-plt.xlabel('支持度')
-plt.ylabel('置信度')
-plt.title('关联规则散点图（颜色=提升度）')
-plt.grid(True, alpha=0.3)
+plt.tight_layout()
 plt.show()
-
-# 输出规则数量统计
-print(f"\\n统计：")
-print(f"总频繁项集数量：{len(frequent_itemsets)}")
-print(f"总关联规则数量：{len(rules)}")
-print(f"提升度>1的规则（正相关）：{len(rules[rules['lift']>1])}")
-print(f"提升度<1的规则（负相关）：{len(rules[rules['lift']<1])}")
 `,
     tips: ['支持度表示商品组合出现的频率', '置信度表示购买A后购买B的概率', '提升度>1表示正向关联，可以用于推荐']
   },
@@ -6154,183 +6063,147 @@ print(f"提升度<1的规则（负相关）：{len(rules[rules['lift']<1])}")
     description: '聚合函数、时间差计算、分位数、客户评分。根据订单表计算最近购买日(R)、频率(F)、金额(M)，利用分位数划分1-5分，组合RFM总分，划分高价值/流失客户。',
     difficulty: '进阶',
     skills: ['RFM模型', '客户分层', '分位数计算'],
-    initialCode: `import pandas as pd
+    initialCode: `# ========== 项目3：RFM客户分层分析 ==========
+import pandas as pd
 import numpy as np
-from datetime import datetime
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime, timedelta
 
-# 1. 生成模拟订单数据
+# 1. 生成客户交易数据
 np.random.seed(42)
-n_customers = 300
-n_orders = 2000
-reference_date = datetime(2024, 6, 1)
+n_customers = 500
+n_transactions = 3000
 
-customer_ids = range(1, n_customers + 1)
+# 生成客户ID
+customer_ids = [f'CUST_{i:04d}' for i in range(1, n_customers+1)]
 
-order_data = []
-for _ in range(n_orders):
-    customer_id = np.random.choice(customer_ids)
-    order_date = reference_date - pd.Timedelta(days=np.random.randint(0, 180))
-    amount = np.random.normal(500, 200)
-    order_data.append({
-        '客户ID': customer_id,
-        '订单ID': len(order_data) + 1,
-        '订单日期': order_date,
-        '订单金额': max(amount, 50)
-    })
+# 生成交易数据
+transactions = []
+end_date = datetime(2024, 12, 31)
 
-orders_df = pd.DataFrame(order_data)
-
-print("="*60)
-print("订单数据概览")
-print("="*60)
-print(f"客户数：{orders_df['客户ID'].nunique()}")
-print(f"订单数：{len(orders_df)}")
-print("\\n订单数据前15行：")
-print(orders_df.head(15))
-print()
-
-# 2. 计算RFM值
-print("="*60)
-print("计算RFM值")
-print("="*60)
-
-rfm = orders_df.groupby('客户ID').agg({
-    '订单日期': lambda x: (reference_date - x.max()).days,  # R: 最近购买天数
-    '订单ID': 'count',  # F: 购买频率
-    '订单金额': 'sum'  # M: 总金额
-}).reset_index()
-
-rfm.columns = ['客户ID', 'R(最近天数)', 'F(频率)', 'M(总金额)']
-
-print("RFM计算结果（前20行）：")
-print(rfm.head(20).round(2))
-print()
-
-# 验证：每个客户的R值应该<=最大日期差
-max_date_diff = (reference_date - orders_df['订单日期'].min()).days
-assert rfm['R(最近天数)'].max() <= max_date_diff, "R值计算错误"
-print(f"✓ R值验证通过（最大天数差：{max_date_diff}天）")
-print()
-
-# 3. RFM评分（使用分位数划分1-5分）
-print("="*60)
-print("RFM评分")
-print("="*60)
-
-# R值评分：越小越好（越近越好），所以分数反转
-rfm['R评分'] = pd.qcut(rfm['R(最近天数)'], q=5, labels=[5, 4, 3, 2, 1]).astype(int)
-# F值评分：越大越好
-rfm['F评分'] = pd.qcut(rfm['F(频率)'].rank(method='first'), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
-# M值评分：越大越好
-rfm['M评分'] = pd.qcut(rfm['M(总金额)'].rank(method='first'), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
-
-print("RFM评分（前15行）：")
-print(rfm[['客户ID', 'R(最近天数)', 'R评分', 'F(频率)', 'F评分', 'M(总金额)', 'M评分']].head(15).round(2))
-print()
-
-# 4. 计算RFM总分
-print("="*60)
-print("RFM总分与客户分层")
-print("="*60)
-
-rfm['RFM总分'] = rfm['R评分'] + rfm['F评分'] + rfm['M评分']
-
-print(f"RFM总分统计：")
-print(f"  最低分：{rfm['RFM总分'].min()}")
-print(f"  最高分：{rfm['RFM总分'].max()}")
-print(f"  平均分：{rfm['RFM总分'].mean():.2f}")
-print()
-
-# 客户分层
-def classify_customer(row):
-    total = row['RFM总分']
-    if total >= 13:  # 3个维度都是4-5分
-        return '高价值客户'
-    elif total >= 10:  # 总分10-12
-        return '重要发展客户'
-    elif total >= 7:  # 总分7-9
-        return '一般客户'
-    elif row['R(最近天数)'] > 60:  # R值高（很久没买）
-        return '流失风险客户'
-    else:
-        return '低价值客户'
-
-rfm['客户类型'] = rfm.apply(classify_customer, axis=1)
-
-print("客户分层结果：")
-print(rfm['客户类型'].value_counts())
-print()
-
-# 5. 详细分析各客户群体
-print("="*60)
-print("各客户群体详细分析")
-print("="*60)
-
-customer_stats = rfm.groupby('客户类型').agg({
-    '客户ID': 'count',
-    'R(最近天数)': 'mean',
-    'F(频率)': 'mean',
-    'M(总金额)': 'mean',
-    'RFM总分': 'mean'
-}).round(2)
-
-customer_stats.columns = ['客户数', '平均R(天数)', '平均F(频次)', '平均M(金额)', '平均总分']
-customer_stats = customer_stats.sort_values('平均M(金额)', ascending=False)
-
-print(customer_stats)
-print()
-
-# 6. 高价值客户明细
-print("="*60)
-print("高价值客户明细")
-print("="*60)
-
-high_value = rfm[rfm['客户类型'] == '高价值客户'].sort_values('RFM总分', ascending=False)
-print(f"高价值客户数：{len(high_value)}")
-print(f"高价值客户占比：{len(high_value)/len(rfm)*100:.1f}%")
-print()
-print("Top 10 高价值客户：")
-print(high_value[['客户ID', 'R评分', 'F评分', 'M评分', 'RFM总分', 'M(总金额)']].head(10).round(2))
-print()
-
-# 7. 流失风险客户分析
-print("="*60)
-print("流失风险客户分析")
-print("="*60)
-
-churn_risk = rfm[rfm['客户类型'] == '流失风险客户']
-print(f"流失风险客户数：{len(churn_risk)}")
-print(f"平均流失天数：{churn_risk['R(最近天数)'].mean():.1f}天")
-print()
-
-# 8. 业务建议
-print("="*60)
-print("业务建议")
-print("="*60)
-
-for customer_type in ['高价值客户', '重要发展客户', '流失风险客户']:
-    type_data = rfm[rfm['客户类型'] == customer_type]
-    count = len(type_data)
-    pct = count / len(rfm) * 100
+for cust_id in customer_ids:
+    n_orders = np.random.poisson(5) + 1  # 每个客户1-10单
+    dates = [end_date - timedelta(days=np.random.exponential(30)) for _ in range(n_orders)]
+    amounts = np.random.gamma(2, 50, n_orders) + 20
     
-    print(f"\\n【{customer_type}】（{count}人，占比{pct:.1f}%）")
-    if customer_type == '高价值客户':
-        print("  策略：VIP专属服务、个性化推荐、积分奖励计划")
-    elif customer_type == '重要发展客户':
-        print("  策略：促销活动推送、升级激励、提升购买频率")
-    elif customer_type == '流失风险客户':
-        print("  策略：流失预警、定向召回、专属优惠券")
-print()
+    for date, amount in zip(dates, amounts):
+        transactions.append({
+            'Customer_ID': cust_id,
+            'Date': date,
+            'Amount': amount
+        })
 
-# 9. 验证
-print("="*60)
-print("验证结果")
-print("="*60)
-assert rfm['RFM总分'].min() >= 3, "RFM总分不应低于3"
-assert rfm['RFM总分'].max() <= 15, "RFM总分不应高于15"
-assert len(high_value) > 0, "应该有高价值客户"
-print(f"✓ RFM分析完成！共分析{len(rfm)}个客户")
-print(f"✓ 发现{len(high_value)}个高价值客户")
+df = pd.DataFrame(transactions)
+df['Date'] = pd.to_datetime(df['Date'])
+
+print(f"数据规模：{len(df)}笔交易，{df['Customer_ID'].nunique()}个客户")
+print(f"日期范围：{df['Date'].min().date()} 至 {df['Date'].max().date()}")
+
+# 2. 数据清洗
+df.drop_duplicates(inplace=True)
+df = df[df['Amount'] > 0]
+df = df[df['Amount'] < 500]  # 过滤极端金额
+
+# 3. 计算RFM指标
+current_date = df['Date'].max() + timedelta(days=1)
+
+rfm = df.groupby('Customer_ID').agg({
+    'Date': lambda x: (current_date - x.max()).days,  # Recency
+    'Customer_ID': 'count',  # Frequency
+    'Amount': 'sum'  # Monetary
+}).rename(columns={
+    'Date': 'Recency',
+    'Customer_ID': 'Frequency',
+    'Amount': 'Monetary'
+})
+
+print(f"
+RFM指标统计：")
+print(rfm.describe())
+
+# 4. RFM评分（1-5分）
+rfm['R_Score'] = pd.qcut(rfm['Recency'], 5, labels=[5,4,3,2,1], duplicates='drop').astype(int)
+rfm['F_Score'] = pd.qcut(rfm['Frequency'].rank(method='first'), 5, labels=[1,2,3,4,5], duplicates='drop').astype(int)
+rfm['M_Score'] = pd.qcut(rfm['Monetary'], 5, labels=[1,2,3,4,5], duplicates='drop').astype(int)
+
+# 计算综合得分
+rfm['RFM_Score'] = rfm['R_Score'] * 100 + rfm['F_Score'] * 10 + rfm['M_Score']
+
+# 5. 客户分层
+def segment_customer(row):
+    if row['R_Score'] >= 4 and row['F_Score'] >= 4 and row['M_Score'] >= 4:
+        return '冠军客户'
+    elif row['R_Score'] >= 4 and row['F_Score'] >= 3:
+        return '忠诚客户'
+    elif row['R_Score'] >= 3 and row['F_Score'] >= 1 and row['M_Score'] >= 3:
+        return '潜力客户'
+    elif row['R_Score'] <= 2 and row['F_Score'] >= 3:
+        return '流失风险客户'
+    elif row['R_Score'] <= 2 and row['F_Score'] <= 2:
+        return '流失客户'
+    else:
+        return '普通客户'
+
+rfm['Segment'] = rfm.apply(segment_customer, axis=1)
+
+print("
+=== 客户分层统计 ===")
+segment_stats = rfm['Segment'].value_counts()
+for segment, count in segment_stats.items():
+    print(f"{segment}: {count}个客户 ({count/len(rfm)*100:.1f}%)")
+
+# 6. 验证计算
+# 验证R_Score：最近购买的天数应该与评分成反比
+print(f"
+验证R_Score逻辑：")
+for score in [1,5]:
+    avg_recency = rfm[rfm['R_Score']==score]['Recency'].mean()
+    print(f"  R_Score={score}的平均最近购买天数：{avg_recency:.1f}天")
+
+# 验证冠军客户特征
+champions = rfm[rfm['Segment']=='冠军客户']
+print(f"
+冠军客户特征：")
+print(f"  平均最近购买：{champions['Recency'].mean():.1f}天")
+print(f"  平均购买频次：{champions['Frequency'].mean():.1f}次")
+print(f"  平均消费金额：¥{champions['Monetary'].mean():.0f}")
+
+# 7. 可视化
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+# RFM分布热力图
+rfm_pivot = rfm.pivot_table(index='R_Score', columns='F_Score', values='Monetary', aggfunc='mean')
+sns.heatmap(rfm_pivot, annot=True, fmt='.0f', cmap='YlOrRd', ax=axes[0,0])
+axes[0,0].set_title('客户价值热力图（金额均值）', fontsize=12)
+
+# 分层占比饼图
+colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3']
+segment_stats.plot(kind='pie', ax=axes[0,1], autopct='%1.1f%%', colors=colors, startangle=90)
+axes[0,1].set_title('客户分层占比', fontsize=12)
+axes[0,1].set_ylabel('')
+
+# 各层级的Monetary分布
+segments_order = ['冠军客户', '忠诚客户', '潜力客户', '普通客户', '流失风险客户', '流失客户']
+sns.boxplot(data=rfm, x='Segment', y='Monetary', order=segments_order, ax=axes[1,0])
+axes[1,0].set_title('各层级消费金额分布', fontsize=12)
+axes[1,0].tick_params(axis='x', rotation=45)
+
+# RFM得分分布
+sns.histplot(rfm['RFM_Score'], bins=30, kde=True, ax=axes[1,1], color='steelblue')
+axes[1,1].set_title('RFM综合得分分布', fontsize=12)
+axes[1,1].set_xlabel('RFM得分')
+
+plt.tight_layout()
+plt.show()
+
+# 8. 输出建议
+print("
+=== 营销建议 ===")
+print(f"1. 冠军客户（{segment_stats.get('冠军客户', 0)}人）：提供VIP专属服务和推荐奖励")
+print(f"2. 忠诚客户（{segment_stats.get('忠诚客户', 0)}人）：交叉销售和高价值商品推荐")
+print(f"3. 潜力客户（{segment_stats.get('潜力客户', 0)}人）：发送优惠券提升购买频次")
+print(f"4. 流失风险客户（{segment_stats.get('流失风险客户', 0)}人）：发送召回邮件和限时折扣")
 `,
     tips: ['R(Recency)越小表示越近，F(Frequency)和M(Monetary)越大越好', 'RFM总分15分为满分，9分为平均', '高价值客户需要重点维护，流失风险客户需要及时挽回']
   },
@@ -6341,225 +6214,181 @@ print(f"✓ 发现{len(high_value)}个高价值客户")
     description: '聚类分析、特征标准化、肘部法则、聚类结果解读。用户数据包含浏览时长、点击次数、加购次数、下单量，清洗异常值后标准化，使用KMeans聚类，为每个用户打标并可视化聚类中心雷达图。',
     difficulty: '进阶',
     skills: ['KMeans聚类', '特征标准化', '用户分群'],
-    initialCode: `import pandas as pd
+    initialCode: `# ========== 项目4：用户行为路径聚类（KMeans） ==========
+import pandas as pd
 import numpy as np
-from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# 1. 生成模拟用户行为数据
+# 1. 生成用户行为数据
 np.random.seed(42)
-n_users = 500
+n_users = 800
 
-# 用户行为特征
-user_data = []
-for user_id in range(1, n_users + 1):
-    # 根据用户类型设置不同的行为模式
-    if user_id <= 150:
-        # 高活跃用户：浏览时间长，点击多，加购多，下单多
-        browse_time = np.random.normal(600, 100)  # 600秒
-        click_count = np.random.normal(30, 8)
-        add_cart_count = np.random.normal(8, 2)
-        order_count = np.random.normal(5, 1)
-    elif user_id <= 300:
-        # 中等活跃用户
-        browse_time = np.random.normal(300, 80)
-        click_count = np.random.normal(15, 5)
-        add_cart_count = np.random.normal(4, 1.5)
-        order_count = np.random.normal(2.5, 0.8)
-    elif user_id <= 400:
-        # 低活跃用户
-        browse_time = np.random.normal(120, 40)
-        click_count = np.random.normal(8, 3)
-        add_cart_count = np.random.normal(1.5, 0.8)
-        order_count = np.random.normal(1.2, 0.5)
-    else:
-        # 浏览型用户：浏览多但下单少
-        browse_time = np.random.normal(450, 90)
-        click_count = np.random.normal(20, 6)
-        add_cart_count = np.random.normal(2, 1)
-        order_count = np.random.normal(0.5, 0.3)
-    
-    user_data.append({
-        '用户ID': user_id,
-        '浏览时长_秒': max(browse_time, 10),
-        '点击次数': max(int(click_count), 1),
-        '加购次数': max(add_cart_count, 0),
-        '下单量': max(order_count, 0)
-    })
+data = {
+    'User_ID': [f'U_{i:04d}' for i in range(n_users)],
+    '浏览时长_分钟': np.random.gamma(2, 15, n_users),
+    '点击次数': np.random.negative_binomial(3, 0.3, n_users),
+    '加购次数': np.random.poisson(3, n_users),
+    '下单次数': np.random.poisson(2, n_users),
+    '平均停留_秒': np.random.normal(120, 40, n_users),
+    '退货次数': np.random.poisson(0.5, n_users)
+}
 
-df = pd.DataFrame(user_data)
+df = pd.DataFrame(data)
 
-print("="*60)
-print("用户行为数据概览")
-print("="*60)
-print(f"用户数：{len(df)}")
-print("\\n数据前15行：")
-print(df.head(15))
-print()
-print("数据统计：")
-print(df.describe().round(2))
-print()
+# 添加相关性：加购多的用户下单也多
+df['加购次数'] = df['加购次数'] + np.random.poisson(1, n_users)
+df['下单次数'] = df['加购次数'] * 0.6 + np.random.normal(0, 0.5, n_users)
+df['下单次数'] = df['下单次数'].clip(0, None).astype(int)
+
+print("数据前5行：")
+print(df.head())
 
 # 2. 数据清洗
-print("="*60)
-print("数据清洗")
-print("="*60)
+# 处理异常值
+for col in ['浏览时长_分钟', '点击次数', '加购次数']:
+    Q1 = df[col].quantile(0.25)
+    Q3 = df[col].quantile(0.75)
+    IQR = Q3 - Q1
+    upper_bound = Q3 + 1.5 * IQR
+    df[col] = df[col].clip(upper=upper_bound)
 
-# 剔除异常值（3σ原则）
-features = ['浏览时长_秒', '点击次数', '加购次数', '下单量']
-for feature in features:
-    mean_val = df[feature].mean()
-    std_val = df[feature].std()
-    lower_bound = mean_val - 3 * std_val
-    upper_bound = mean_val + 3 * std_val
-    
-    outliers = (df[feature] < lower_bound) | (df[feature] > upper_bound)
-    n_outliers = outliers.sum()
-    
-    if n_outliers > 0:
-        print(f"{feature}: 发现{n_outliers}个异常值，已剔除")
-        df = df[~outliers]
+print(f"
+清洗后数据形状：{df.shape}")
 
-print(f"清洗后用户数：{len(df)}")
-print()
-
-# 3. 特征标准化
-print("="*60)
-print("特征标准化")
-print("="*60)
-
+# 3. 选择聚类特征
+features = ['浏览时长_分钟', '点击次数', '加购次数', '下单次数', '平均停留_秒']
 X = df[features]
+
+# 4. 标准化
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
-print("标准化后的特征（前10行）：")
-print(pd.DataFrame(X_scaled, columns=features).head(10).round(4))
-print()
+print(f"
+标准化后数据形状：{X_scaled.shape}")
 
-# 4. 肘部法则确定最佳K值
-print("="*60)
-print("肘部法则确定最佳K值")
-print("="*60)
-
+# 5. 确定最优K值（肘部法则+轮廓系数）
 inertias = []
-silhouette_scores = []
-k_range = range(2, 11)
+silhouettes = []
+K_range = range(2, 11)
 
-for k in k_range:
+for k in K_range:
     kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
     kmeans.fit(X_scaled)
     inertias.append(kmeans.inertia_)
-    sil_score = silhouette_score(X_scaled, kmeans.labels_)
-    silhouette_scores.append(sil_score)
-    print(f"K={k}: Inertia={kmeans.inertia_:.2f}, 轮廓系数={sil_score:.4f}")
+    silhouettes.append(silhouette_score(X_scaled, kmeans.labels_))
 
-# 选择K=4
-best_k = 4
-print(f"\\n选择K={best_k}")
-print()
+# 6. 选择最佳K值（取轮廓系数最大的K）
+best_k = K_range[np.argmax(silhouettes)]
+print(f"
+最优K值：{best_k}（轮廓系数={max(silhouettes):.3f}）")
 
-# 5. KMeans聚类
-print("="*60)
-print("用户行为聚类")
-print("="*60)
-
+# 7. 使用最佳K值进行聚类
 kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
-df['簇标签'] = kmeans.fit_predict(X_scaled)
+df['Cluster'] = kmeans.fit_predict(X_scaled)
 
-print("聚类结果分布：")
-print(df['簇标签'].value_counts().sort_index())
-print()
-
-# 计算轮廓系数
-final_sil_score = silhouette_score(X_scaled, df['簇标签'])
-print(f"最终轮廓系数：{final_sil_score:.4f}")
-print()
-
-# 6. 聚类特征分析
-print("="*60)
-print("各簇用户行为特征")
-print("="*60)
-
-cluster_stats = df.groupby('簇标签')[features].mean().round(2)
-cluster_stats['用户数'] = df.groupby('簇标签').size()
-
-print(cluster_stats)
-print()
-
-# 7. 为各簇命名
-print("="*60)
-print("用户群体画像")
-print("="*60)
-
-cluster_names = {}
-for cluster_id in range(best_k):
-    stats = cluster_stats.loc[cluster_id]
-    
-    # 基于特征判断用户类型
-    if stats['浏览时长_秒'] > 400 and stats['下单量'] > 4:
-        name = '高价值活跃用户'
-    elif stats['浏览时长_秒'] > 250 and stats['下单量'] > 2:
-        name = '潜力用户'
-    elif stats['下单量'] < 1:
-        name = '浏览型用户'
-    else:
-        name = '一般用户'
-    
-    cluster_names[cluster_id] = name
-    print(f"\\n【簇{cluster_id}】{name}")
-    print(f"  用户数：{int(stats['用户数'])}")
-    print(f"  平均浏览时长：{stats['浏览时长_秒']:.0f}秒")
-    print(f"  平均点击次数：{stats['点击次数']:.1f}次")
-    print(f"  平均加购次数：{stats['加购次数']:.1f}次")
-    print(f"  平均下单量：{stats['下单量']:.1f}单")
-
-df['用户类型'] = df['簇标签'].map(cluster_names)
-print()
-
-# 8. 聚类中心雷达图数据
-print("="*60)
-print("聚类中心雷达图数据")
-print("="*60)
-
+# 8. 聚类结果分析
 cluster_centers = pd.DataFrame(
     scaler.inverse_transform(kmeans.cluster_centers_),
-    columns=features,
-    index=[f'簇{i}({cluster_names[i]})' for i in range(best_k)]
+    columns=features
 )
+cluster_centers['Cluster'] = range(best_k)
+
+print("
+=== 聚类中心特征值 ===")
 print(cluster_centers.round(2))
-print()
 
-# 9. 业务建议
-print("="*60)
-print("业务建议")
-print("="*60)
-
-for user_type in cluster_names.values():
-    type_data = df[df['用户类型'] == user_type]
-    print(f"\\n【{user_type}】（{len(type_data)}人）")
-    
-    if '高价值' in user_type:
-        print("  策略：VIP专属服务、优先体验新品、积分加倍")
-    elif '潜力' in user_type:
-        print("  策略：引导下单、促进加购、限时优惠")
-    elif '浏览' in user_type:
-        print("  策略：优化商品推荐、增加互动、提升购买转化")
+# 9. 为每个聚类添加业务标签
+cluster_names = {}
+for i in range(best_k):
+    center = cluster_centers.iloc[i]
+    if center['下单次数'] > 5:
+        cluster_names[i] = '高频购买型'
+    elif center['浏览时长_分钟'] > 60 and center['下单次数'] < 2:
+        cluster_names[i] = '浏览观望型'
+    elif center['加购次数'] > 5 and center['下单次数'] < 3:
+        cluster_names[i] = '加购犹豫型'
+    elif center['浏览时长_分钟'] < 20:
+        cluster_names[i] = '低活跃型'
     else:
-        print("  策略：定期触达、促销活动提醒")
+        cluster_names[i] = '普通用户型'
 
-# 10. 验证
-print()
-print("="*60)
-print("验证结果")
-print("="*60)
-assert '簇标签' in df.columns, "聚类结果缺失"
-assert len(df['簇标签'].unique()) == best_k, "簇数量不正确"
-print(f"✓ 聚类完成，共{len(df)}个用户分成{best_k}个群体")
-print(f"✓ 轮廓系数：{final_sil_score:.4f}")
-print("✓ 用户行为聚类分析完成！")
+df['Cluster_Label'] = df['Cluster'].map(cluster_names)
+
+print("
+=== 各聚类用户数量 ===")
+cluster_counts = df['Cluster_Label'].value_counts()
+for label, count in cluster_counts.items():
+    print(f"{label}: {count}人 ({count/len(df)*100:.1f}%)")
+
+# 10. 验证聚类质量
+sil_score = silhouette_score(X_scaled, df['Cluster'])
+print(f"
+轮廓系数：{sil_score:.3f}")
+
+# 验证不同聚类间的特征差异（方差分析）
+from scipy import stats
+print("
+特征差异性检验（ANOVA p-value）：")
+for feature in features:
+    groups = [df[df['Cluster']==c][feature].values for c in range(best_k)]
+    f_stat, p_value = stats.f_oneway(*groups)
+    print(f"  {feature}: p={p_value:.2e} {'✓ 显著差异' if p_value < 0.05 else '✗ 无显著差异'}")
+
+# 11. 可视化
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+# 肘部法则图
+axes[0,0].plot(K_range, inertias, 'bo-')
+axes[0,0].set_xlabel('K值')
+axes[0,0].set_ylabel('惯性（Inertia）')
+axes[0,0].set_title('肘部法则图')
+axes[0,0].axvline(best_k, color='r', linestyle='--', label=f'最佳K={best_k}')
+axes[0,0].legend()
+
+# 轮廓系数图
+axes[0,1].plot(K_range, silhouettes, 'ro-')
+axes[0,1].set_xlabel('K值')
+axes[0,1].set_ylabel('轮廓系数')
+axes[0,1].set_title('轮廓系数曲线')
+axes[0,1].axvline(best_k, color='g', linestyle='--', label=f'最佳K={best_k}')
+axes[0,1].legend()
+
+# 聚类散点图（取两个主要特征）
+from sklearn.decomposition import PCA
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_scaled)
+
+scatter = axes[1,0].scatter(X_pca[:, 0], X_pca[:, 1], c=df['Cluster'], cmap='viridis', alpha=0.6, s=30)
+axes[1,0].set_xlabel('PCA1')
+axes[1,0].set_ylabel('PCA2')
+axes[1,0].set_title(f'用户聚类可视化（{best_k}个聚类）')
+plt.colorbar(scatter, ax=axes[1,0])
+
+# 雷达图展示聚类中心
+from math import pi
+categories = features
+N = len(categories)
+angles = [n / float(N) * 2 * pi for n in range(N)]
+angles += angles[:1]
+
+ax_radar = axes[1,1]
+for i in range(best_k):
+    values = cluster_centers.iloc[i][features].values.flatten().tolist()
+    values += values[:1]
+    ax_radar.plot(angles, values, 'o-', linewidth=2, label=f'聚类{i}: {cluster_names[i]}')
+ax_radar.set_xticks(angles[:-1])
+ax_radar.set_xticklabels(categories)
+ax_radar.set_title('聚类中心雷达图')
+ax_radar.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0))
+
+plt.tight_layout()
+plt.show()
 `,
-    tips: ['轮廓系数越接近1表示聚类效果越好', '雷达图可以直观展示不同用户群体的行为差异', '聚类结果可以指导差异化的运营策略']
+    tips: ['KMeans聚类前需要标准化特征', '肘部法则和轮廓系数可以帮助确定最佳K值', '聚类后需要为每个簇赋予业务含义']
   },
   {
     id: 'bi-project-5',
