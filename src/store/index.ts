@@ -553,6 +553,106 @@ const mockChapters: Chapter[] = [
     studyDurationMinutes: 240,
     keyPoints: ['端到端分析', '综合项目', '报告生成', '业务建议'],
     hasCodePractice: true
+  },
+  {
+    id: 'chapter-43',
+    courseId: 'course-4',
+    title: '项目1：订单数据清洗与基础质检',
+    content: '用 Pandas 处理缺失值、重复值、异常格式，构建干净的基础订单表。处理日期列的格式统一与超出范围日期，剔除数量≤0或单价≤0的记录，识别并处理订单总价与数量*单价不一致的行，检测并标记重复订单。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['数据清洗', '缺失值处理', '异常值检测', '数据验证'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-44',
+    courseId: 'course-4',
+    title: '项目2：库存周转与缺货预警分析',
+    content: '计算产品库存周转率，识别周转过慢与可能缺货的 SKU。按月计算每个产品的销售数量总和，计算周转率 = 月销量 / 平均库存，标记周转率<0.5（滞销）和>5（高周转但库存低的缺货风险）。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['库存周转', '缺货预警', '周转率计算'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-45',
+    courseId: 'course-4',
+    title: '项目3：购物车分析——订单内产品组合频次',
+    content: '基于订单明细，计算同时购买的产品对（Pair）及其频次。按订单分组，构造每个订单的产品列表，生成所有产品对，统计全量数据中每对产品的共现次数，找出 Top 10 最常一起购买的产品组合。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['关联规则', '产品组合', '共现频次'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-46',
+    courseId: 'course-4',
+    title: '项目4：客户价值分层（RFM + KMeans 聚类）',
+    content: '使用 RFM（最近购买、频率、金额）做客户聚类。计算每个客户的 R / F / M 值，标准化 RFM 特征，使用 KMeans 聚类（elbow 法选 k），解释各群组业务含义。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['RFM模型', 'KMeans聚类', '客户分层'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-47',
+    courseId: 'course-4',
+    title: '项目5：供应商交货准时率与质量评分聚类',
+    content: '对供应商进行基于准时率、不良率、响应时间的聚类。计算准时率、不良率、平均延期天数，去除异常供应商（数据不足），使用 KMeans 聚类（k=3 或 4），识别优秀、一般、高风险供应商。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['供应商评分', '聚类分析', '风险识别'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-48',
+    courseId: 'course-4',
+    title: '项目6：季节性销售聚类（产品按月销量模式聚类）',
+    content: '找出不同销售季节模式的产品群。构建产品 × 月份 销量矩阵，对产品进行聚类（按销量时间序列形状），分析每类产品的峰值月份、低谷月份，建议对应月份的库存策略。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['时间序列聚类', '季节性分析', '库存策略'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-49',
+    courseId: 'course-4',
+    title: '项目7：仓库选址候选点聚类（基于客户地址经纬度）',
+    content: '基于客户分布，聚类出 K 个仓库候选点。清洗无效坐标，使用 KMeans 聚类（按实际业务需求设定 K=5~10），计算每个聚类中心坐标作为候选仓库，统计各仓库覆盖的订单数量。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['仓库选址', '地理聚类', '订单覆盖'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-50',
+    courseId: 'course-4',
+    title: '项目8：促销效果对比（A/B 类产品购货车分析对比',
+    content: '对比促销组与非促销组的购物车关联规则差异。拆分促销订单与非促销订单，分别计算两类订单中的高共现产品对，找出仅在促销组中显著出现的产品对，分析促销是否改变了购买组合习惯。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['A/B测试', '促销分析', '产品共现'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-51',
+    courseId: 'course-4',
+    title: '项目9：退货原因聚类分析（文本 + 数量特征',
+    content: '对退货订单进行聚类，发现主要退货模式。对退货原因文本做 TF-IDF 向量化，结合退货金额与数量特征，一起做 KMeans 聚类，解读每个聚类（如：质量问题退货、数量多发退货、无理由退货）。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['退货分析', '文本向量化', 'KMeans聚类'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-52',
+    courseId: 'course-4',
+    title: '项目10：预测性补货——结合销量聚类与安全库存计算',
+    content: '基于销量波动聚类，对不同类产品设置差异化安全库存公式。计算每个产品的月销量标准差与均值，对产品做聚类（高波动/低波动/季节性波动），为每类产品自动计算安全库存，对比传统固定库存策略与聚类差异化策略的库存成本差异。',
+    isCompleted: false,
+    studyDurationMinutes: 240,
+    keyPoints: ['预测性补货', '安全库存', '成本优化'],
+    hasCodePractice: true
   }
 ];
 

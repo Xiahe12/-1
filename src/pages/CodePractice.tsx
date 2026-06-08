@@ -4071,6 +4071,1748 @@ print("✓ 端到端分析报告生成完成！")
 print("="*70)
 `,
     tips: ['端到端项目要注意整个流程的完整性和可复现性', '报告要简洁明了，结论要有数据支持', '业务建议要具体且可落地']
+  },
+  {
+    id: 'scm-project-1',
+    chapterId: 'chapter-43',
+    title: '订单数据清洗与基础质检',
+    description: '用 Pandas 处理缺失值、重复值、异常格式，构建干净的基础订单表。处理日期列的格式统一与超出范围日期，剔除数量≤0或单价≤0的记录，识别并处理订单总价与数量*单价不一致的行，检测并标记重复订单。',
+    difficulty: '基础',
+    skills: ['数据清洗', '缺失值处理', '异常值检测', '数据验证'],
+    initialCode: `import pandas as pd
+import numpy as np
+from datetime import datetime
+
+# 1. 生成模拟订单数据（包含各种错误）
+np.random.seed(42)
+n = 500
+
+# 基础数据
+order_ids = range(1, n+1)
+dates = pd.date_range('2024-01-01', periods=n, freq='3H')
+customer_ids = np.random.randint(1, 51, n)
+product_ids = np.random.randint(1, 21, n)
+quantities = np.random.randint(-2, 10, n)
+unit_prices = np.random.uniform(10, 500, n).round(2)
+total_amounts = quantities * unit_prices
+
+# 构造DataFrame
+df = pd.DataFrame({
+    '订单ID': order_ids,
+    '日期': dates,
+    '客户ID': customer_ids,
+    '产品ID': product_ids,
+    '数量': quantities,
+    '单价': unit_prices,
+    '总金额': total_amounts
+})
+
+# 引入错误
+# 1. 缺失日期
+df.loc[np.random.choice(n, 30), '日期'] = pd.NaT
+# 2. 缺失客户ID
+df.loc[np.random.choice(n, 25), '客户ID'] = np.nan
+# 3. 错误的总金额（手动篡改50行）
+df.loc[np.random.choice(n, 50), '总金额'] = df.loc[np.random.choice(n, 50), '总金额'] * np.random.uniform(0.8, 1.2, 50)
+# 4. 添加重复行
+df = pd.concat([df, df.sample(50, random_state=42)], ignore_index=True)
+
+print("="*60)
+print("原始数据概览")
+print("="*60)
+print(f"原始行数：{len(df)}")
+print("\\n数据类型：")
+print(df.dtypes)
+print("\\n缺失值统计：")
+print(df.isnull().sum())
+print("\\n前20行数据：")
+print(df.head(20))
+print()
+
+# 2. 数据清洗函数
+def clean_order_data(df):
+    """订单数据清洗"""
+    df_clean = df.copy()
+    
+    # 任务1：处理日期列
+    # 移除缺失日期行
+    df_clean = df_clean.dropna(subset=['日期'])
+    # 转换日期格式
+    df_clean['日期'] = pd.to_datetime(df_clean['日期'])
+    # 移除超出范围的日期（只保留2024年的）
+    df_clean = df_clean[(df_clean['日期'] >= '2024-01-01') & (df_clean['日期'] <= '2024-12-31')]
+    print(f"日期清洗后行数：{len(df_clean)}")
+    
+    # 任务2：处理数量和单价
+    # 剔除数量<=0的记录
+    initial_count = len(df_clean)
+    df_clean = df_clean[df_clean['数量'] > 0]
+    print(f"剔除数量<=0后：{len(df_clean)}（删除{initial_count - len(df_clean)}行）")
+    
+    # 剔除单价<=0的记录
+    initial_count = len(df_clean)
+    df_clean = df_clean[df_clean['单价'] > 0]
+    print(f"剔除单价<=0后：{len(df_clean)}（删除{initial_count - len(df_clean)}行）")
+    
+    # 任务3：处理订单总价不一致
+    # 计算理论总金额
+    df_clean['理论金额'] = df_clean['数量'] * df_clean['单价']
+    df_clean['金额差异'] = abs(df_clean['总金额'] - df_clean['理论金额'])
+    # 标记不一致的订单
+    df_clean['金额不一致'] = df_clean['金额差异'] > 0.01
+    inconsistent_count = df_clean['金额不一致'].sum()
+    print(f"金额不一致订单数：{inconsistent_count}")
+    # 可以选择修正或删除，这里我们用理论金额替换
+    df_clean.loc[df_clean['金额不一致'], '总金额'] = df_clean.loc[df_clean['金额不一致'], '理论金额']
+    
+    # 任务4：检测重复订单（同一客户同一天同一产品）
+    duplicate_mask = df_clean.duplicated(subset=['客户ID', '日期', '产品ID'], keep='first')
+    df_clean['是否重复'] = duplicate_mask
+    duplicate_count = duplicate_mask.sum()
+    print(f"重复订单数：{duplicate_count}")
+    # 删除重复订单（保留第一条）
+    df_clean = df_clean[~duplicate_mask]
+    
+    return df_clean
+
+print("\\n" + "="*60)
+print("执行数据清洗")
+print("="*60)
+df_cleaned = clean_order_data(df)
+
+# 3. 清洗前后对比
+print("\\n" + "="*60)
+print("清洗前后对比")
+print("="*60)
+print(f"清洗前行数：{len(df)}")
+print(f"清洗后行数：{len(df_cleaned)}")
+print(f"删除总行数：{len(df) - len(df_cleaned)}")
+print(f"删除比例：{(len(df) - len(df_cleaned))/len(df)*100:.2f}%")
+
+# 4. 异常记录明细
+print("\\n" + "="*60)
+print("异常记录统计")
+print("="*60)
+if '是否重复' in df_cleaned.columns:
+    print(f"重复订单数：{df_cleaned['是否重复'].sum()}")
+if '金额不一致' in df_cleaned.columns:
+    print(f"金额不一致订单数：{df_cleaned['金额不一致'].sum()}")
+    
+print("\\n清洗后数据前20行：")
+print(df_cleaned.head(20))
+print()
+
+# 5. 数据验证
+assert len(df_cleaned) > 0, "清洗后数据为空"
+assert df_cleaned['数量'].min() > 0, "仍有无效数量"
+assert df_cleaned['单价'].min() > 0, "仍有无效单价"
+assert df_cleaned['日期'].isnull().sum() == 0, "仍有缺失日期"
+print("✓ 数据清洗完成，验证通过！")
+`,
+    tips: ['日期要先转换为datetime类型再进行范围筛选', '金额不一致可以用理论金额替换或标记后手动处理', '重复检测要选择合适的关键字段组合']
+  },
+  {
+    id: 'scm-project-2',
+    chapterId: 'chapter-44',
+    title: '库存周转与缺货预警分析',
+    description: '计算产品库存周转率，识别周转过慢与可能缺货的 SKU。按月计算每个产品的销售数量总和，计算周转率 = 月销量 / 平均库存，标记周转率<0.5（滞销）和>5（高周转但库存低的缺货风险）。',
+    difficulty: '基础',
+    skills: ['库存周转', '缺货预警', '周转率计算'],
+    initialCode: `import pandas as pd
+import numpy as np
+
+# 1. 生成模拟数据
+np.random.seed(42)
+n_months = 12
+n_products = 30
+
+# 产品表
+products = pd.DataFrame({
+    '产品ID': range(1, n_products + 1),
+    '产品名称': [f'产品{i}' for i in range(1, n_products + 1)],
+    '品类': np.random.choice(['电子产品', '服装', '食品', '家居'], n_products),
+    '当前库存': np.random.randint(50, 500, n_products),
+    '补货周期_天': np.random.randint(7, 30, n_products)
+})
+
+# 月度销售数据（12个月）
+sales_data = []
+for month in range(1, n_months + 1):
+    for product_id in range(1, n_products + 1):
+        # 模拟销量（考虑季节性）
+        base_sales = np.random.randint(20, 100)
+        # 电子产品在年底销量更高
+        if products.loc[products['产品ID'] == product_id, '品类'].values[0] == '电子产品' and month in [11, 12]:
+            base_sales = int(base_sales * 1.5)
+        sales_data.append({
+            '月份': month,
+            '产品ID': product_id,
+            '销售数量': base_sales
+        })
+
+sales_df = pd.DataFrame(sales_data)
+
+# 平均库存（简化：假设每月末库存稳定）
+inventory_df = products[['产品ID', '当前库存']].copy()
+inventory_df['平均库存'] = inventory_df['当前库存'] * 0.9  # 假设平均为当前的90%
+
+print("="*60)
+print("数据概览")
+print("="*60)
+print(f"产品数：{len(products)}")
+print(f"月度销售记录数：{len(sales_df)}")
+print("\\n产品表：")
+print(products.head(10))
+print("\\n月度销售数据（前20行）：")
+print(sales_df.head(20))
+print()
+
+# 2. 按月计算每个产品的销售数量总和
+print("="*60)
+print("月度销量统计")
+print("="*60)
+monthly_sales = sales_df.groupby(['月份', '产品ID'])['销售数量'].sum().reset_index()
+print("月度销量（前20行）：")
+print(monthly_sales.head(20))
+print()
+
+# 3. 计算周转率
+print("="*60)
+print("计算库存周转率")
+print("="*60)
+
+# 月度总销量
+product_monthly_total = sales_df.groupby('产品ID')['销售数量'].sum().reset_index()
+product_monthly_total.columns = ['产品ID', '月度总销量']
+
+# 合并库存数据
+turnover_df = product_monthly_total.merge(inventory_df[['产品ID', '平均库存']], on='产品ID')
+
+# 计算周转率 = 月销量 / 平均库存
+turnover_df['周转率'] = turnover_df['月度总销量'] / turnover_df['平均库存']
+
+print("周转率计算结果：")
+print(turnover_df.round(2))
+print()
+
+# 4. 标记风险产品
+print("="*60)
+print("风险产品识别")
+print("="*60)
+
+# 周转率 < 0.5：滞销
+turnover_df['滞销风险'] = turnover_df['周转率'] < 0.5
+# 周转率 > 5：缺货风险（高周转但库存可能不足）
+turnover_df['缺货风险'] = turnover_df['周转率'] > 5
+
+print(f"滞销产品数（周转率<0.5）：{turnover_df['滞销风险'].sum()}")
+print(f"缺货风险产品数（周转率>5）：{turnover_df['缺货风险'].sum()}")
+
+print("\\n滞销产品清单：")
+slow_moving = turnover_df[turnover_df['滞销风险']].sort_values('周转率')
+print(slow_moving[['产品ID', '月度总销量', '平均库存', '周转率']].round(2))
+
+print("\\n缺货风险产品清单：")
+stockout_risk = turnover_df[turnover_df['缺货风险']].sort_values('周转率', ascending=False)
+print(stockout_risk[['产品ID', '月度总销量', '平均库存', '周转率']].round(2))
+print()
+
+# 5. 结合补货周期计算预警
+print("="*60)
+print("缺货预警分析")
+print("="*60)
+turnover_df = turnover_df.merge(products[['产品ID', '补货周期_天']], on='产品ID')
+
+# 计算安全库存（简化版）
+# 安全库存 = 日均销量 × 补货周期 × 1.5（安全系数）
+turnover_df['日均销量'] = turnover_df['月度总销量'] / 30
+turnover_df['建议安全库存'] = (turnover_df['日均销量'] * turnover_df['补货周期_天'] * 1.5).round(0)
+turnover_df['库存是否充足'] = turnover_df['当前库存'] >= turnover_df['建议安全库存']
+
+print("缺货预警详情：")
+risk_warning = turnover_df[(turnover_df['缺货风险']) | (~turnover_df['库存是否充足'])]
+print(risk_warning[['产品ID', '月度总销量', '当前库存', '建议安全库存', '库存是否充足']].round(2))
+print()
+
+# 6. 验证
+assert '周转率' in turnover_df.columns, "周转率计算缺失"
+assert len(turnover_df) == n_products, "产品数量不匹配"
+print("✓ 库存周转与缺货预警分析完成！")
+`,
+    tips: ['周转率 = 月销量 / 平均库存', '周转率过低表示滞销，周转率过高可能缺货', '安全库存要结合补货周期和日均销量计算']
+  },
+  {
+    id: 'scm-project-3',
+    chapterId: 'chapter-45',
+    title: '购物车分析——订单内产品组合频次',
+    description: '基于订单明细，计算同时购买的产品对（Pair）及其频次。按订单分组，构造每个订单的产品列表，生成所有产品对，统计全量数据中每对产品的共现次数，找出 Top 10 最常一起购买的产品组合。',
+    difficulty: '基础',
+    skills: ['关联规则', '产品组合', '共现频次'],
+    initialCode: `import pandas as pd
+import numpy as np
+from itertools import combinations
+
+# 1. 生成模拟订单数据
+np.random.seed(42)
+n_orders = 1000
+n_products = 20
+
+# 产品列表
+products = {
+    i: f'产品{i}' for i in range(1, n_products + 1)
+}
+
+# 生成订单（每个订单包含1-5个产品）
+order_data = []
+for order_id in range(1, n_orders + 1):
+    # 随机选择1-5个产品
+    n_items = np.random.randint(1, 6)
+    product_ids = np.random.choice(range(1, n_products + 1), n_items, replace=False)
+    
+    for product_id in product_ids:
+        order_data.append({
+            '订单ID': order_id,
+            '产品ID': product_id,
+            '产品名称': products[product_id]
+        })
+
+order_df = pd.DataFrame(order_data)
+
+print("="*60)
+print("订单明细数据")
+print("="*60)
+print(f"总订单数：{order_df['订单ID'].nunique()}")
+print(f"总记录数：{len(order_df)}")
+print("\\n订单明细（前30行）：")
+print(order_df.head(30))
+print()
+
+# 2. 按订单分组，构造产品列表
+print("="*60)
+print("构造产品购物篮")
+print("="*60)
+baskets = order_df.groupby('订单ID')['产品ID'].apply(list).reset_index()
+baskets.columns = ['订单ID', '产品列表']
+print(f"购物篮数量：{len(baskets)}")
+print("\\n购物篮示例（前10个）：")
+for i in range(10):
+    print(f"订单{baskets.iloc[i]['订单ID']}: {[products[p] for p in baskets.iloc[i]['产品列表']]}")
+print()
+
+# 3. 生成所有产品对
+print("="*60)
+print("生成产品对组合")
+print("="*60)
+
+pair_counts = {}
+for _, row in baskets.iterrows():
+    products_in_basket = row['产品列表']
+    # 生成所有两两组合
+    if len(products_in_basket) >= 2:
+        for pair in combinations(sorted(products_in_basket), 2):
+            pair_key = (min(pair), max(pair))  # 确保顺序一致
+            pair_counts[pair_key] = pair_counts.get(pair_key, 0) + 1
+
+# 转换为DataFrame
+pair_df = pd.DataFrame([
+    {'产品1_ID': pair[0], '产品2_ID': pair[1], 
+     '产品1': products[pair[0]], '产品2': products[pair[1]], 
+     '共现次数': count}
+    for pair, count in pair_counts.items()
+])
+
+# 添加产品名称列
+pair_df = pair_df.sort_values('共现次数', ascending=False)
+
+print(f"总产品对数：{len(pair_df)}")
+print("\\n产品对共现统计（前20个）：")
+print(pair_df.head(20))
+print()
+
+# 4. 找出Top 10最常一起购买的产品组合
+print("="*60)
+print("Top 10 最常一起购买的产品组合")
+print("="*60)
+top_10_pairs = pair_df.head(10)
+print(top_10_pairs[['产品1', '产品2', '共现次数']])
+print()
+
+# 计算支持度
+total_orders = len(baskets)
+top_10_pairs['支持度'] = top_10_pairs['共现次数'] / total_orders
+
+print("Top 10 产品对的详细分析：")
+for idx, row in top_10_pairs.iterrows():
+    print(f"\\n产品组合：{row['产品1']} + {row['产品2']}")
+    print(f"  共现次数：{row['共现次数']}")
+    print(f"  支持度：{row['支持度']:.2%}")
+    
+    # 判断是否适合捆绑促销
+    if row['支持度'] > 0.05:
+        recommendation = "强烈建议捆绑促销"
+    elif row['支持度'] > 0.02:
+        recommendation = "可以考虑捆绑促销"
+    else:
+        recommendation = "暂不推荐捆绑促销"
+    print(f"  建议：{recommendation}")
+print()
+
+# 5. 按品类分析产品对
+print("="*60)
+print("品类间产品组合分析")
+print("="*60)
+
+# 获取产品品类信息
+product_category = {i: np.random.choice(['电子产品', '服装', '食品', '家居']) for i in range(1, n_products + 1)}
+pair_df['品类1'] = pair_df['产品1_ID'].map(product_category)
+pair_df['品类2'] = pair_df['产品2_ID'].map(product_category)
+
+# 统计品类间组合
+cross_category = pair_df[pair_df['品类1'] != pair_df['品类2']].groupby(['品类1', '品类2'])['共现次数'].sum().reset_index()
+cross_category = cross_category.sort_values('共现次数', ascending=False)
+
+print("跨品类产品组合（Top 10）：")
+print(cross_category.head(10))
+print()
+
+# 6. 验证
+assert len(pair_df) > 0, "没有生成有效产品对"
+assert pair_df['共现次数'].max() > 0, "共现次数为0"
+print("✓ 购物车产品组合分析完成！")
+`,
+    tips: ['共现次数表示两个产品同时出现在同一订单的次数', '支持度 = 共现次数 / 总订单数', '支持度高的产品对适合捆绑促销']
+  },
+  {
+    id: 'scm-project-4',
+    chapterId: 'chapter-46',
+    title: '客户价值分层（RFM + KMeans 聚类）',
+    description: '使用 RFM（最近购买、频率、金额）做客户聚类。计算每个客户的 R / F / M 值，标准化 RFM 特征，使用 KMeans 聚类（elbow 法选 k），解释各群组业务含义。',
+    difficulty: '进阶',
+    skills: ['RFM模型', 'KMeans聚类', '客户分层'],
+    initialCode: `import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+# 1. 生成模拟订单数据
+np.random.seed(42)
+n_customers = 200
+n_orders = 3000
+reference_date = datetime(2024, 3, 1)
+
+# 客户表
+customers = pd.DataFrame({
+    '客户ID': range(1, n_customers + 1),
+    '客户名称': [f'客户{i}' for i in range(1, n_customers + 1)],
+    '注册日期': [reference_date - timedelta(days=np.random.randint(30, 365)) for _ in range(n_customers)]
+})
+
+# 订单表
+order_data = []
+for _ in range(n_orders):
+    customer_id = np.random.randint(1, n_customers + 1)
+    order_date = reference_date - timedelta(days=np.random.randint(0, 90))
+    amount = np.random.normal(500, 200)
+    order_data.append({
+        '客户ID': customer_id,
+        '订单ID': len(order_data) + 1,
+        '订单日期': order_date,
+        '订单金额': max(amount, 50)
+    })
+
+orders_df = pd.DataFrame(order_data)
+
+print("="*60)
+print("数据概览")
+print("="*60)
+print(f"客户数：{len(customers)}")
+print(f"订单数：{len(orders_df)}")
+print("\\n订单数据（前20行）：")
+print(orders_df.head(20))
+print()
+
+# 2. 计算RFM值
+print("="*60)
+print("计算RFM值")
+print("="*60)
+
+rfm = orders_df.groupby('客户ID').agg({
+    '订单日期': lambda x: (reference_date - x.max()).days,  # R：最近消费天数
+    '订单ID': 'count',  # F：订单频次
+    '订单金额': 'sum'  # M：总消费金额
+}).reset_index()
+
+rfm.columns = ['客户ID', 'R（最近消费天数）', 'F（订单频次）', 'M（总消费金额）']
+
+print("RFM计算结果（前20行）：")
+print(rfm.head(20).round(2))
+print()
+
+# 3. 标准化RFM特征
+print("="*60)
+print("标准化RFM特征")
+print("="*60)
+
+features = ['R（最近消费天数）', 'F（订单频次）', 'M（总消费金额）']
+X = rfm[features]
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+print("标准化后的RFM特征（前10行）：")
+print(pd.DataFrame(X_scaled, columns=features, index=rfm['客户ID']).head(10).round(4))
+print()
+
+# 4. 使用肘部法则确定K值
+print("="*60)
+print("肘部法则确定K值")
+print("="*60)
+
+inertias = []
+k_range = range(2, 11)
+
+for k in k_range:
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    kmeans.fit(X_scaled)
+    inertias.append(kmeans.inertia_)
+    print(f"K={k}: Inertia={kmeans.inertia_:.2f}")
+
+# 选择K=4（业务通常将客户分为4层）
+best_k = 4
+print(f"\\n选择K={best_k}（高价值、重要发展、一般、流失边缘）")
+print()
+
+# 5. KMeans聚类
+print("="*60)
+print("KMeans客户聚类")
+print("="*60)
+
+kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+rfm['簇标签'] = kmeans.fit_predict(X_scaled)
+rfm['簇标签'] = rfm['簇标签'].astype(int)
+
+print("聚类结果分布：")
+print(rfm['簇标签'].value_counts().sort_index())
+print()
+
+# 6. 分析各簇特征
+print("="*60)
+print("各簇业务含义解读")
+print("="*60)
+
+cluster_stats = rfm.groupby('簇标签').agg({
+    '客户ID': 'count',
+    'R（最近消费天数）': 'mean',
+    'F（订单频次）': 'mean',
+    'M（总消费金额）': 'mean'
+}).round(2)
+
+cluster_stats.columns = ['客户数', '平均R值', '平均F值', '平均M值']
+
+# 为各簇命名
+cluster_names = {}
+for cluster_id in range(best_k):
+    stats = cluster_stats.loc[cluster_id]
+    if stats['平均R值'] < 15 and stats['平均F值'] > 15 and stats['平均M值'] > 600:
+        name = '高价值活跃客户'
+    elif stats['平均R值'] < 30 and stats['平均F值'] > 10:
+        name = '重要发展客户'
+    elif stats['平均R值'] > 50:
+        name = '流失边缘客户'
+    else:
+        name = '一般价值客户'
+    cluster_names[cluster_id] = name
+
+cluster_stats['业务含义'] = cluster_stats.index.map(cluster_names)
+print(cluster_stats)
+print()
+
+# 为每个客户标注群体
+rfm['客户群体'] = rfm['簇标签'].map(cluster_names)
+
+# 7. 输出各群体客户明细
+print("="*60)
+print("各群体客户明细")
+print("="*60)
+
+for cluster_id in range(best_k):
+    cluster_name = cluster_names[cluster_id]
+    cluster_customers = rfm[rfm['簇标签'] == cluster_id]
+    print(f"\\n【{cluster_name}】（共{len(cluster_customers)}人）")
+    print(cluster_customers[['客户ID', 'R（最近消费天数）', 'F（订单频次）', 'M（总消费金额）']].sort_values('M（总消费金额）', ascending=False).head(5))
+print()
+
+# 8. 验证
+assert '簇标签' in rfm.columns, "聚类结果缺失"
+assert len(rfm['簇标签'].unique()) == best_k, "簇数量不正确"
+print("✓ RFM客户分层完成！")
+`,
+    tips: ['R值越小（最近消费越近）越好', 'F值和M值越大越好', '聚类后要给每个簇赋予业务含义，便于制定差异化策略']
+  },
+  {
+    id: 'scm-project-5',
+    chapterId: 'chapter-47',
+    title: '供应商交货准时率与质量评分聚类',
+    description: '对供应商进行基于准时率、不良率、响应时间的聚类。计算准时率、不良率、平均延期天数，去除异常供应商（数据不足），使用 KMeans 聚类（k=3 或 4），识别优秀、一般、高风险供应商。',
+    difficulty: '进阶',
+    skills: ['供应商评分', '聚类分析', '风险识别'],
+    initialCode: `import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+# 1. 生成模拟采购数据
+np.random.seed(42)
+n_suppliers = 50
+n_orders = 500
+
+# 供应商表
+suppliers = pd.DataFrame({
+    '供应商ID': range(1, n_suppliers + 1),
+    '供应商名称': [f'供应商{i}' for i in range(1, n_suppliers + 1)],
+    '供应商类型': np.random.choice(['原材料', '零部件', '包装'], n_suppliers)
+})
+
+# 采购订单表
+purchase_data = []
+for order_id in range(1, n_orders + 1):
+    supplier_id = np.random.randint(1, n_suppliers + 1)
+    planned_date = datetime(2024, 1, 1) + timedelta(days=np.random.randint(0, 90))
+    # 模拟延期（有些供应商经常延期）
+    if supplier_id <= 15:
+        delay_days = np.random.normal(0, 2)  # 准时型
+    elif supplier_id <= 35:
+        delay_days = np.random.normal(5, 3)  # 轻微延期
+    else:
+        delay_days = np.random.normal(15, 5)  # 严重延期
+    
+    actual_date = planned_date + timedelta(days=max(delay_days, 0))
+    
+    # 模拟不良品
+    if supplier_id <= 20:
+        defect_rate = np.random.uniform(0, 0.02)  # 优质
+    elif supplier_id <= 40:
+        defect_rate = np.random.uniform(0.02, 0.05)  # 一般
+    else:
+        defect_rate = np.random.uniform(0.05, 0.15)  # 较差
+    
+    total_items = np.random.randint(100, 1000)
+    defect_items = int(total_items * defect_rate)
+    
+    purchase_data.append({
+        '订单ID': order_id,
+        '供应商ID': supplier_id,
+        '计划交货日': planned_date,
+        '实际交货日': actual_date,
+        '延期天数': max(delay_days, 0),
+        '总件数': total_items,
+        '不良品数': defect_items
+    })
+
+purchase_df = pd.DataFrame(purchase_data)
+
+print("="*60)
+print("采购数据概览")
+print("="*60)
+print(f"供应商数：{n_suppliers}")
+print(f"订单数：{len(purchase_df)}")
+print("\\n采购订单数据（前20行）：")
+print(purchase_df.head(20))
+print()
+
+# 2. 计算供应商绩效指标
+print("="*60)
+print("计算供应商绩效指标")
+print("="*60)
+
+supplier_stats = purchase_df.groupby('供应商ID').agg({
+    '订单ID': 'count',  # 订单数
+    '延期天数': ['mean', 'sum'],  # 平均延期、总延期
+    '总件数': 'sum',  # 总供货量
+    '不良品数': 'sum'  # 总不良品数
+}).reset_index()
+
+supplier_stats.columns = ['供应商ID', '订单数', '平均延期天数', '总延期天数', '总供货量', '总不良品数']
+
+# 计算准时率和不良率
+supplier_stats['准时率'] = ((supplier_stats['平均延期天数'] <= 0) | (supplier_stats['平均延期天数'].isna())).astype(int)
+supplier_stats['准时率'] = 1 - (supplier_stats['平均延期天数'] / supplier_stats['平均延期天数'].max()).clip(0, 1)
+supplier_stats['不良率'] = supplier_stats['总不良品数'] / supplier_stats['总供货量']
+
+print("供应商绩效统计（前20行）：")
+print(supplier_stats.head(20).round(4))
+print()
+
+# 3. 去除异常供应商（数据不足）
+print("="*60)
+print("数据质量筛选")
+print("="*60)
+MIN_ORDERS = 5
+supplier_stats_filtered = supplier_stats[supplier_stats['订单数'] >= MIN_ORDERS].copy()
+print(f"原始供应商数：{len(supplier_stats)}")
+print(f"订单数>={MIN_ORDERS}的供应商数：{len(supplier_stats_filtered)}")
+print()
+
+# 4. KMeans聚类
+print("="*60)
+print("供应商聚类分析")
+print("="*60)
+
+features = ['准时率', '不良率', '平均延期天数']
+X = supplier_stats_filtered[features]
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# 选择K=3
+best_k = 3
+kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+supplier_stats_filtered['簇标签'] = kmeans.fit_predict(X_scaled)
+
+print(f"聚类数量K={best_k}")
+print("聚类结果分布：")
+print(supplier_stats_filtered['簇标签'].value_counts().sort_index())
+print()
+
+# 5. 分析各簇特征
+print("="*60)
+print("各簇供应商特征分析")
+print("="*60)
+
+cluster_stats = supplier_stats_filtered.groupby('簇标签').agg({
+    '供应商ID': 'count',
+    '准时率': 'mean',
+    '不良率': 'mean',
+    '平均延期天数': 'mean'
+}).round(4)
+
+cluster_stats.columns = ['供应商数', '平均准时率', '平均不良率', '平均延期天数']
+
+# 为各簇命名
+cluster_names = {}
+for cluster_id in range(best_k):
+    stats = cluster_stats.loc[cluster_id]
+    if stats['平均准时率'] > 0.9 and stats['平均不良率'] < 0.02:
+        name = '优秀供应商'
+    elif stats['平均准时率'] > 0.7 and stats['平均不良率'] < 0.05:
+        name = '一般供应商'
+    else:
+        name = '高风险供应商'
+    cluster_names[cluster_id] = name
+
+cluster_stats['供应商类别'] = cluster_stats.index.map(cluster_names)
+print(cluster_stats)
+print()
+
+# 6. 为供应商分类
+supplier_stats_filtered['供应商类别'] = supplier_stats_filtered['簇标签'].map(cluster_names)
+
+print("="*60)
+print("各类别供应商明细")
+print("="*60)
+
+for category in ['优秀供应商', '一般供应商', '高风险供应商']:
+    category_suppliers = supplier_stats_filtered[supplier_stats_filtered['供应商类别'] == category]
+    print(f"\\n【{category}】（共{len(category_suppliers)}家）")
+    if len(category_suppliers) > 0:
+        print(category_suppliers[['供应商ID', '订单数', '准时率', '不良率', '平均延期天数']].sort_values('准时率', ascending=False).head(10).round(4))
+print()
+
+# 7. 验证
+assert '簇标签' in supplier_stats_filtered.columns, "聚类结果缺失"
+print("✓ 供应商交货准时率与质量评分聚类完成！")
+`,
+    tips: ['准时率越高、不良率越低表示供应商越好', '聚类可以自动发现供应商的分层', '高风险供应商需要重点关注和改进']
+  },
+  {
+    id: 'scm-project-6',
+    chapterId: 'chapter-48',
+    title: '季节性销售聚类（产品按月销量模式聚类）',
+    description: '找出不同销售季节模式的产品群。构建产品 × 月份 销量矩阵，对产品进行聚类（按销量时间序列形状），分析每类产品的峰值月份、低谷月份，建议对应月份的库存策略。',
+    difficulty: '进阶',
+    skills: ['时间序列聚类', '季节性分析', '库存策略'],
+    initialCode: `import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+# 1. 生成模拟月度销量数据
+np.random.seed(42)
+n_products = 30
+n_months = 12
+
+# 产品信息
+products = pd.DataFrame({
+    '产品ID': range(1, n_products + 1),
+    '产品名称': [f'产品{i}' for i in range(1, n_products + 1)],
+    '品类': np.random.choice(['服装', '电子产品', '食品', '家居'], n_products)
+})
+
+# 生成月度销量（考虑季节性）
+sales_data = []
+for product_id in range(1, n_products + 1):
+    # 基础销量
+    base_sales = np.random.randint(100, 500)
+    
+    # 根据品类设置季节性模式
+    if products.loc[products['产品ID'] == product_id, '品类'].values[0] == '服装':
+        # 服装：春秋季高，夏季低
+        seasonal_pattern = [0.6, 0.7, 0.9, 1.2, 1.5, 0.8, 0.7, 0.8, 1.3, 1.2, 0.9, 0.5]
+    elif products.loc[products['产品ID'] == product_id, '品类'].values[0] == '电子产品':
+        # 电子产品：年底促销高
+        seasonal_pattern = [0.7, 0.8, 0.9, 1.0, 1.0, 1.1, 0.9, 1.0, 1.1, 1.2, 1.5, 2.0]
+    elif products.loc[products['产品ID'] == product_id, '品类'].values[0] == '食品':
+        # 食品：全年稳定，节假日略高
+        seasonal_pattern = [1.0, 1.0, 1.0, 1.0, 1.1, 1.0, 1.0, 1.0, 1.1, 1.0, 1.2, 1.3]
+    else:
+        # 家居：春季和年底高
+        seasonal_pattern = [0.8, 0.9, 1.2, 1.3, 1.0, 0.9, 0.8, 0.9, 1.0, 1.1, 1.4, 1.2]
+    
+    for month in range(1, n_months + 1):
+        # 添加随机波动
+        sales = base_sales * seasonal_pattern[month-1] * np.random.uniform(0.9, 1.1)
+        sales_data.append({
+            '产品ID': product_id,
+            '月份': month,
+            '销量': int(sales)
+        })
+
+sales_df = pd.DataFrame(sales_data)
+
+print("="*60)
+print("月度销量数据")
+print("="*60)
+print(f"产品数：{n_products}")
+print(f"月度记录数：{len(sales_df)}")
+print("\\n销量数据（前30行）：")
+print(sales_df.head(30))
+print()
+
+# 2. 构建产品 × 月份 销量矩阵
+print("="*60)
+print("构建产品-月份矩阵")
+print("="*60)
+sales_matrix = sales_df.pivot(index='产品ID', columns='月份', values='销量').fillna(0)
+print("产品-月份销量矩阵（前10个产品）：")
+print(sales_matrix.head(10))
+print()
+
+# 3. 对产品进行聚类
+print("="*60)
+print("产品销量模式聚类")
+print("="*60)
+
+# 标准化每个产品的销量模式（除以均值，消除绝对值影响）
+sales_matrix_normalized = sales_matrix.div(sales_matrix.mean(axis=1), axis=0)
+print("标准化后的销量模式（前10个产品）：")
+print(sales_matrix_normalized.head(10).round(2))
+print()
+
+X = sales_matrix_normalized.values
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# 选择K=3（不同季节性模式）
+best_k = 3
+kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+cluster_labels = kmeans.fit_predict(X_scaled)
+
+print(f"聚类数量K={best_k}")
+print("各簇产品数：")
+print(pd.Series(cluster_labels).value_counts().sort_index())
+print()
+
+# 4. 分析每个簇的特征
+print("="*60)
+print("各簇季节性特征分析")
+print("="*60)
+
+# 计算每个簇的月度平均销量
+cluster_centers_df = pd.DataFrame(
+    kmeans.cluster_centers_,
+    columns=[f'月份{i}' for i in range(1, n_months + 1)],
+    index=[f'簇{i}' for i in range(best_k)]
+)
+print("聚类中心（销量模式）：")
+print(cluster_centers_df.round(2))
+print()
+
+# 为产品标注聚类
+products['聚类'] = cluster_labels
+
+# 分析每个簇的峰值和低谷月份
+cluster_analysis = []
+for cluster_id in range(best_k):
+    cluster_products = products[products['聚类'] == cluster_id]['产品ID'].values
+    cluster_sales = sales_matrix.loc[cluster_products].mean()
+    
+    peak_month = cluster_sales.idxmax()
+    low_month = cluster_sales.idxmin()
+    total_sales = cluster_sales.sum()
+    
+    cluster_analysis.append({
+        '簇ID': cluster_id,
+        '产品数': len(cluster_products),
+        '总销量': total_sales,
+        '峰值月份': peak_month,
+        '峰值销量': cluster_sales.max(),
+        '低谷月份': low_month,
+        '低谷销量': cluster_sales.min()
+    })
+
+cluster_analysis_df = pd.DataFrame(cluster_analysis)
+
+# 为各簇命名
+def name_cluster(row):
+    peak = row['峰值月份']
+    low = row['低谷月份']
+    if peak in [11, 12] or peak == 1:
+        return '年底旺季型'
+    elif peak in [4, 5, 9, 10]:
+        return '春秋季型'
+    elif peak in [6, 7, 8]:
+        return '夏季旺季型'
+    else:
+        return '稳定型'
+
+cluster_analysis_df['季节类型'] = cluster_analysis_df.apply(name_cluster, axis=1)
+
+print("各簇季节性分析：")
+print(cluster_analysis_df)
+print()
+
+# 5. 库存策略建议
+print("="*60)
+print("库存策略建议")
+print("="*60)
+
+for _, row in cluster_analysis_df.iterrows():
+    print(f"\\n【{row['季节类型']}】（簇{row['簇ID']}）")
+    print(f"  产品数：{row['产品数']}")
+    print(f"  峰值月份：{row['峰值月份']}月（销量：{row['峰值销量']:.0f}）")
+    print(f"  低谷月份：{row['低谷月份']}月（销量：{row['低谷销量']:.0f}）")
+    
+    # 库存建议
+    if '旺季' in row['季节类型']:
+        print(f"  库存建议：")
+        print(f"    - 峰值月前1个月开始备货")
+        print(f"    - 保持安全库存在峰值销量的150%")
+        print(f"    - 低谷月减少采购，避免积压")
+    else:
+        print(f"  库存建议：")
+        print(f"    - 全年保持稳定库存水平")
+        print(f"    - 关注节假日提前备货")
+print()
+
+# 6. 验证
+assert '聚类' in products.columns, "聚类结果缺失"
+print("✓ 季节性销售聚类分析完成！")
+`,
+    tips: ['不同品类的产品有不同的时间序列模式', '可以用肘部法则确定最佳聚类数', '聚类结果可以指导差异化的库存策略']
+  },
+  {
+    id: 'scm-project-7',
+    chapterId: 'chapter-49',
+    title: '仓库选址候选点聚类（基于客户地址经纬度）',
+    description: '基于客户分布，聚类出 K 个仓库候选点。清洗无效坐标，使用 KMeans 聚类（按实际业务需求设定 K=5~10），计算每个聚类中心坐标作为候选仓库，统计各仓库覆盖的订单数量。',
+    difficulty: '进阶',
+    skills: ['仓库选址', '地理聚类', '订单覆盖'],
+    initialCode: `import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+
+# 1. 生成模拟客户位置数据
+np.random.seed(42)
+n_customers = 500
+n_orders = 2000
+
+# 客户表（包含经纬度坐标，模拟国内城市分布）
+# 假设主要分布在几个大城市群
+city_centers = {
+    '北京': (39.9, 116.4),
+    '上海': (31.2, 121.5),
+    '广州': (23.1, 113.3),
+    '深圳': (22.5, 114.1),
+    '成都': (30.6, 104.0),
+    '杭州': (30.3, 120.2)
+}
+
+customer_data = []
+for i in range(n_customers):
+    # 随机选择一个城市群
+    city = np.random.choice(list(city_centers.keys()))
+    lat, lon = city_centers[city]
+    
+    # 添加随机偏移（模拟城市内分布）
+    lat += np.random.normal(0, 0.5)
+    lon += np.random.normal(0, 0.5)
+    
+    customer_data.append({
+        '客户ID': i + 1,
+        '客户名称': f'客户{i+1}',
+        '纬度': lat,
+        '经度': lon,
+        '所属城市': city
+    })
+
+customers_df = pd.DataFrame(customer_data)
+
+# 订单表
+order_data = []
+for _ in range(n_orders):
+    customer_id = np.random.randint(1, n_customers + 1)
+    order_date = f'2024-{np.random.randint(1, 13):02d}-{np.random.randint(1, 29):02d}'
+    amount = np.random.uniform(100, 5000)
+    order_data.append({
+        '客户ID': customer_id,
+        '订单ID': len(order_data) + 1,
+        '订单日期': order_date,
+        '订单金额': amount
+    })
+
+orders_df = pd.DataFrame(order_data)
+
+print("="*60)
+print("客户地理位置数据")
+print("="*60)
+print(f"客户数：{n_customers}")
+print("\\n客户位置数据（前20行）：")
+print(customers_df.head(20))
+print()
+
+# 2. 数据清洗
+print("="*60)
+print("数据清洗")
+print("="*60)
+
+# 清洗无效坐标（中国范围大致：纬度20-50，经度73-135）
+initial_count = len(customers_df)
+customers_clean = customers_df[
+    (customers_df['纬度'] >= 20) & (customers_df['纬度'] <= 50) &
+    (customers_df['经度'] >= 73) & (customers_df['经度'] <= 135)
+].copy()
+
+print(f"清洗前行数：{initial_count}")
+print(f"清洗后行数：{len(customers_clean)}")
+print(f"删除无效坐标：{initial_count - len(customers_clean)}")
+print()
+
+# 3. KMeans聚类找仓库候选点
+print("="*60)
+print("仓库候选点聚类")
+print("="*60)
+
+# 设定K=6（对应6个城市群）
+best_k = 6
+coords = customers_clean[['纬度', '经度']].values
+
+kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+customers_clean['仓库簇'] = kmeans.fit_predict(coords)
+
+# 计算聚类中心
+centers = kmeans.cluster_centers_
+print(f"聚类数量K={best_k}")
+print("候选仓库坐标：")
+for i, center in enumerate(centers):
+    print(f"  仓库{i+1}: 纬度={center[0]:.4f}, 经度={center[1]:.4f}")
+print()
+
+# 4. 统计各仓库覆盖的订单数量
+print("="*60)
+print("各仓库订单覆盖统计")
+print("="*60)
+
+# 合并客户和订单
+orders_with_coords = orders_df.merge(customers_clean[['客户ID', '仓库簇']], on='客户ID')
+
+warehouse_stats = orders_with_coords.groupby('仓库簇').agg({
+    '订单ID': 'count',
+    '订单金额': ['sum', 'mean']
+}).reset_index()
+
+warehouse_stats.columns = ['仓库簇', '订单数', '总金额', '平均金额']
+
+# 添加仓库坐标
+warehouse_stats['纬度'] = [centers[i][0] for i in warehouse_stats['仓库簇']]
+warehouse_stats['经度'] = [centers[i][1] for i in warehouse_stats['仓库簇']]
+
+print("各仓库统计：")
+print(warehouse_stats.round(2))
+print()
+
+# 5. 按仓库统计覆盖的客户数
+print("="*60)
+print("各仓库客户覆盖分析")
+print("="*60)
+
+customer_coverage = customers_clean.groupby('仓库簇').size().reset_index()
+customer_coverage.columns = ['仓库簇', '客户数']
+customer_coverage['纬度'] = [centers[i][0] for i in customer_coverage['仓库簇']]
+customer_coverage['经度'] = [centers[i][1] for i in customer_coverage['仓库簇']]
+
+print("各仓库客户覆盖：")
+print(customer_coverage)
+print()
+
+# 6. 生成仓库选址建议
+print("="*60)
+print("仓库选址建议")
+print("="*60)
+
+for _, row in warehouse_stats.iterrows():
+    warehouse_id = int(row['仓库簇']) + 1
+    print(f"\\n【仓库{warehouse_id}】")
+    print(f"  建议坐标：纬度={row['纬度']:.4f}, 经度={row['经度']:.4f}")
+    print(f"  覆盖订单数：{row['订单数']}")
+    print(f"  覆盖订单总金额：¥{row['总金额']:,.2f}")
+    print(f"  覆盖客户数：{customer_coverage[customer_coverage['仓库簇']==row['仓库簇']]['客户数'].values[0]}")
+    
+    # 建议
+    if row['订单数'] > 400:
+        priority = "高优先级，建议优先建设"
+    elif row['订单数'] > 250:
+        priority = "中优先级，建议中期建设"
+    else:
+        priority = "低优先级，可延后建设"
+    print(f"  建设优先级：{priority}")
+print()
+
+# 7. 验证
+assert '仓库簇' in customers_clean.columns, "聚类结果缺失"
+assert len(warehouse_stats) == best_k, "仓库数量不匹配"
+print("✓ 仓库选址候选点聚类完成！")
+`,
+    tips: ['KMeans会自动找到K个聚类中心作为仓库候选点', '可以根据实际业务需求设定K值', '订单覆盖量可以指导仓库建设优先级']
+  },
+  {
+    id: 'scm-project-8',
+    chapterId: 'chapter-50',
+    title: '促销效果对比（A/B 类产品购货车分析对比）',
+    description: '对比促销组与非促销组的购物车关联规则差异。拆分促销订单与非促销订单，分别计算两类订单中的高共现产品对，找出仅在促销组中显著出现的产品对，分析促销是否改变了购买组合习惯。',
+    difficulty: '进阶',
+    skills: ['A/B测试', '促销分析', '产品共现'],
+    initialCode: `import pandas as pd
+import numpy as np
+from itertools import combinations
+
+# 1. 生成模拟订单数据（包含促销标记）
+np.random.seed(42)
+n_orders = 1000
+n_products = 20
+
+products = {i: f'产品{i}' for i in range(1, n_products + 1)}
+
+# 生成订单
+order_data = []
+for order_id in range(1, n_orders + 1):
+    # 30%的订单为促销订单
+    is_promotion = np.random.random() < 0.3
+    
+    # 促销产品和非促销产品有不同的购买模式
+    if is_promotion:
+        # 促销订单：更容易购买促销产品（产品1-10为促销产品）
+        n_items = np.random.randint(1, 5)
+        product_pool = range(1, 11)  # 促销产品池
+    else:
+        # 非促销订单：购买更分散
+        n_items = np.random.randint(1, 6)
+        product_pool = range(1, n_products + 1)
+    
+    product_ids = np.random.choice(list(product_pool), n_items, replace=False)
+    
+    for product_id in product_ids:
+        order_data.append({
+            '订单ID': order_id,
+            '产品ID': product_id,
+            '是否促销': 1 if is_promotion else 0
+        })
+
+order_df = pd.DataFrame(order_data)
+
+print("="*60)
+print("订单数据概览")
+print("="*60)
+print(f"总订单数：{order_df['订单ID'].nunique()}")
+print(f"促销订单数：{order_df[order_df['是否促销']==1]['订单ID'].nunique()}")
+print(f"非促销订单数：{order_df[order_df['是否促销']==0]['订单ID'].nunique()}")
+print()
+
+# 2. 拆分促销组和非促销组
+print("="*60)
+print("拆分促销组与非促销组")
+print("="*60)
+
+promo_orders = order_df[order_df['是否促销'] == 1]['订单ID'].unique()
+non_promo_orders = order_df[order_df['是否促销'] == 0]['订单ID'].unique()
+
+promo_df = order_df[order_df['是否促销'] == 1].copy()
+non_promo_df = order_df[order_df['是否促销'] == 0].copy()
+
+print(f"促销组订单数：{len(promo_orders)}")
+print(f"非促销组订单数：{len(non_promo_orders)}")
+print()
+
+# 3. 计算各组产品共现
+def calculate_cooccurrence(df, order_ids):
+    """计算产品共现矩阵"""
+    df_filtered = df[df['订单ID'].isin(order_ids)]
+    baskets = df_filtered.groupby('订单ID')['产品ID'].apply(list).reset_index()
+    
+    pair_counts = {}
+    for _, row in baskets.iterrows():
+        products_in_basket = row['产品ID']
+        if len(products_in_basket) >= 2:
+            for pair in combinations(sorted(set(products_in_basket)), 2):
+                pair_key = (min(pair), max(pair))
+                pair_counts[pair_key] = pair_counts.get(pair_key, 0) + 1
+    
+    return pair_counts
+
+print("="*60)
+print("计算产品共现频次")
+print("="*60)
+
+promo_pairs = calculate_cooccurrence(promo_df, promo_orders)
+non_promo_pairs = calculate_cooccurrence(non_promo_df, non_promo_orders)
+
+print(f"促销组产品对数：{len(promo_pairs)}")
+print(f"非促销组产品对数：{len(non_promo_pairs)}")
+print()
+
+# 4. 构建对比表
+print("="*60)
+print("促销组 Top10 产品共现")
+print("="*60)
+
+promo_pairs_df = pd.DataFrame([
+    {'产品1': products[p[0]], '产品2': products[p[1]], '共现次数': count}
+    for p, count in sorted(promo_pairs.items(), key=lambda x: x[1], reverse=True)[:10]
+])
+print(promo_pairs_df)
+print()
+
+print("="*60)
+print("非促销组 Top10 产品共现")
+print("="*60)
+
+non_promo_pairs_df = pd.DataFrame([
+    {'产品1': products[p[0]], '产品2': products[p[1]], '共现次数': count}
+    for p, count in sorted(non_promo_pairs.items(), key=lambda x: x[1], reverse=True)[:10]
+])
+print(non_promo_pairs_df)
+print()
+
+# 5. 找出仅在促销组显著的产品对
+print("="*60)
+print("促销特有产品组合分析")
+print("="*60)
+
+# 计算支持度
+promo_support = {pair: count/len(promo_orders) for pair, count in promo_pairs.items()}
+non_promo_support = {pair: count/len(non_promo_orders) for pair, count in non_promo_pairs.items()}
+
+# 找出促销组支持度明显高于非促销组的产品对
+promo_only_pairs = []
+for pair, promo_supp in promo_support.items():
+    non_promo_supp = non_promo_support.get(pair, 0)
+    if promo_supp > 0.05 and promo_supp / (non_promo_supp + 0.001) > 1.5:
+        promo_only_pairs.append({
+            '产品1': products[pair[0]],
+            '产品2': products[pair[1]],
+            '促销支持度': promo_supp,
+            '非促销支持度': non_promo_supp,
+            '提升倍数': promo_supp / (non_promo_supp + 0.001)
+        })
+
+promo_only_df = pd.DataFrame(promo_only_pairs)
+promo_only_df = promo_only_df.sort_values('提升倍数', ascending=False)
+
+if len(promo_only_df) > 0:
+    print("促销显著提升的产品组合：")
+    print(promo_only_df.round(4))
+else:
+    print("没有找到促销显著提升的产品组合")
+print()
+
+# 6. 业务结论
+print("="*60)
+print("促销效果业务结论")
+print("="*60)
+
+if len(promo_only_df) > 0:
+    print(f"发现{len(promo_only_df)}个促销显著提升的产品组合")
+    print("\\n业务建议：")
+    print("1. 这些产品组合在促销期间购买频次显著提升")
+    print("2. 建议在促销时将这些产品捆绑销售")
+    print("3. 可以针对这些组合设计专门的促销方案")
+else:
+    print("促销对产品组合购买习惯影响不明显")
+    print("\\n可能的原因为：")
+    print("- 促销力度不够大")
+    print("- 产品关联性本身较弱")
+    print("- 需要更长的观察周期")
+print()
+
+# 7. 验证
+assert len(promo_pairs_df) > 0 or len(non_promo_pairs_df) > 0, "没有计算到有效产品对"
+print("✓ 促销效果对比分析完成！")
+`,
+    tips: ['A/B测试可以对比促销前后的产品组合变化', '提升倍数大的产品对说明促销效果显著', '可以利用促销特有组合设计捆绑销售方案']
+  },
+  {
+    id: 'scm-project-9',
+    chapterId: 'chapter-51',
+    title: '退货原因聚类分析（文本 + 数量特征）',
+    description: '对退货订单进行聚类，发现主要退货模式。对退货原因文本做 TF-IDF 向量化，结合退货金额与数量特征，一起做 KMeans 聚类，解读每个聚类（如：质量问题退货、数量多发退货、无理由退货）。',
+    difficulty: '进阶',
+    skills: ['退货分析', '文本向量化', 'KMeans聚类'],
+    initialCode: `import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+# 1. 生成模拟退货数据
+np.random.seed(42)
+n_returns = 300
+
+# 退货原因文本库
+reason_templates = [
+    '质量问题，多次维修仍无法使用',
+    '尺寸不合适，偏大',
+    '尺寸不合适，偏小',
+    '颜色与图片不符',
+    '商品破损，包装损坏',
+    '收到错误商品',
+    '不想要了',
+    '后悔购买',
+    '七天无理由退货',
+    '与其他平台比较后发现更便宜',
+    '数量错误，少发了一件',
+    '数量错误，多发了一件',
+    '性能不达标',
+    '做工粗糙',
+    '气味刺鼻'
+]
+
+return_data = []
+for i in range(n_returns):
+    # 根据退货原因类型设置损失金额和数量
+    reason_template = np.random.choice(reason_templates)
+    
+    # 质量问题的损失较高
+    if '质量' in reason_template or '破损' in reason_template or '错误' in reason_template:
+        return_amount = np.random.uniform(200, 1000)
+        return_quantity = np.random.randint(1, 3)
+    elif '尺寸' in reason_template or '颜色' in reason_template:
+        return_amount = np.random.uniform(100, 500)
+        return_quantity = 1
+    else:
+        return_amount = np.random.uniform(50, 300)
+        return_quantity = 1
+    
+    return_data.append({
+        '退货ID': i + 1,
+        '退货原因': reason_template,
+        '退货金额': return_amount,
+        '退货数量': return_quantity,
+        '商品类别': np.random.choice(['服装', '电子产品', '家居', '食品'])
+    })
+
+returns_df = pd.DataFrame(return_data)
+
+print("="*60)
+print("退货数据概览")
+print("="*60)
+print(f"总退货数：{len(returns_df)}")
+print("\\n退货数据（前20行）：")
+print(returns_df.head(20))
+print()
+
+# 2. 文本特征向量化（简化版：基于关键词）
+print("="*60)
+print("退货原因文本特征提取")
+print("="*60)
+
+# 定义关键词特征
+keywords = ['质量', '尺寸', '颜色', '破损', '错误', '不想要', '后悔', '无理由', '便宜', '数量', '性能', '做工', '气味']
+
+def extract_keyword_features(text):
+    features = []
+    for keyword in keywords:
+        features.append(1 if keyword in text else 0)
+    return features
+
+keyword_features = returns_df['退货原因'].apply(lambda x: extract_keyword_features(x))
+keyword_df = pd.DataFrame(keyword_features.tolist(), columns=keywords)
+keyword_df.index = returns_df.index
+
+print("文本关键词特征（前20行）：")
+print(keyword_df.head(20))
+print()
+
+# 3. 合并特征
+print("="*60)
+print("合并文本和数值特征")
+print("="*60)
+
+# 数值特征
+numeric_features = returns_df[['退货金额', '退货数量']].values
+
+# 合并特征
+X_text = keyword_df.values
+X_numeric = StandardScaler().fit_transform(numeric_features)
+X_combined = np.hstack([X_text, X_numeric])
+
+print(f"合并特征维度：{X_combined.shape}")
+print()
+
+# 4. KMeans聚类
+print("="*60)
+print("退货原因聚类")
+print("="*60)
+
+best_k = 3
+kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+returns_df['簇标签'] = kmeans.fit_predict(X_combined)
+
+print(f"聚类数量K={best_k}")
+print("各簇退货数：")
+print(returns_df['簇标签'].value_counts().sort_index())
+print()
+
+# 5. 分析每个聚类的特征
+print("="*60)
+print("各聚类退货模式分析")
+print("="*60)
+
+cluster_analysis = []
+for cluster_id in range(best_k):
+    cluster_data = returns_df[returns_df['簇标签'] == cluster_id]
+    
+    # 统计数值特征
+    avg_amount = cluster_data['退货金额'].mean()
+    avg_quantity = cluster_data['退货数量'].mean()
+    
+    # 统计高频关键词
+    keyword_freq = keyword_df.loc[cluster_data.index].sum().sort_values(ascending=False)
+    top_keywords = keyword_freq[keyword_freq > 0].head(3).index.tolist()
+    
+    # 统计退货原因
+    reason_counts = cluster_data['退货原因'].value_counts()
+    top_reasons = reason_counts.head(2).index.tolist()
+    
+    cluster_analysis.append({
+        '簇ID': cluster_id,
+        '退货数': len(cluster_data),
+        '平均损失金额': avg_amount,
+        '平均退货数量': avg_quantity,
+        '高频原因': ', '.join(top_reasons[:2]),
+        '关键词': ', '.join(top_keywords)
+    })
+
+cluster_df = pd.DataFrame(cluster_analysis)
+
+# 为各簇命名
+def name_cluster(row):
+    reasons = row['高频原因']
+    keywords = row['关键词']
+    
+    if '质量' in reasons or '破损' in reasons or '做工' in reasons or '气味' in reasons:
+        return '质量问题退货'
+    elif '尺寸' in reasons or '颜色' in reasons:
+        return '外观不符退货'
+    elif '错误' in reasons or '数量' in reasons:
+        return '发货错误退货'
+    elif '不想要' in reasons or '后悔' in reasons or '无理由' in reasons:
+        return '主观意愿退货'
+    else:
+        return '其他原因退货'
+
+cluster_df['退货类型'] = cluster_df.apply(name_cluster, axis=1)
+
+print(cluster_df)
+print()
+
+# 6. 详细分析各类型
+print("="*60)
+print("各类退货详细分析")
+print("="*60)
+
+returns_df['退货类型'] = returns_df['簇标签'].map(
+    dict(zip(cluster_df['簇ID'], cluster_df['退货类型']))
+)
+
+for return_type in cluster_df['退货类型']:
+    type_data = returns_df[returns_df['退货类型'] == return_type]
+    print(f"\\n【{return_type}】（共{len(type_data)}单）")
+    print(f"  平均损失金额：¥{type_data['退货金额'].mean():.2f}")
+    print(f"  平均退货数量：{type_data['退货数量'].mean():.2f}")
+    print(f"  典型退货原因：")
+    for reason, count in type_data['退货原因'].value_counts().head(3).items():
+        print(f"    - {reason} ({count}单)")
+print()
+
+# 7. 业务建议
+print("="*60)
+print("业务改进建议")
+print("="*60)
+
+for _, row in cluster_df.iterrows():
+    print(f"\\n【{row['退货类型']}】")
+    print(f"  占比：{row['退货数']/len(returns_df)*100:.1f}%")
+    
+    if row['退货类型'] == '质量问题退货':
+        print("  建议：加强供应商质量管控，完善退换货流程")
+    elif row['退货类型'] == '外观不符退货':
+        print("  建议：优化商品描述页，确保图片与实物一致")
+    elif row['退货类型'] == '发货错误退货':
+        print("  建议：升级仓储系统，增加发货复核环节")
+    elif row['退货类型'] == '主观意愿退货':
+        print("  建议：优化商品详情页，帮助用户做出更准确的购买决策")
+print()
+
+# 8. 验证
+assert '簇标签' in returns_df.columns, "聚类结果缺失"
+print("✓ 退货原因聚类分析完成！")
+`,
+    tips: ['文本特征可以简化为关键词出现与否', '结合数值特征可以更全面地刻画退货模式', '聚类结果可以指导针对性的改进措施']
+  },
+  {
+    id: 'scm-project-10',
+    chapterId: 'chapter-52',
+    title: '预测性补货——结合销量聚类与安全库存计算',
+    description: '基于销量波动聚类，对不同类产品设置差异化安全库存公式。计算每个产品的月销量标准差与均值，对产品做聚类（高波动/低波动/季节性波动），为每类产品自动计算安全库存，对比传统固定库存策略与聚类差异化策略的库存成本差异。',
+    difficulty: '综合',
+    skills: ['预测性补货', '安全库存', '成本优化'],
+    initialCode: `import pandas as pd
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+# 1. 生成模拟月度销量数据
+np.random.seed(42)
+n_products = 50
+n_months = 12
+
+# 产品信息
+products = pd.DataFrame({
+    '产品ID': range(1, n_products + 1),
+    '产品名称': [f'产品{i}' for i in range(1, n_products + 1)],
+    '单价': np.random.uniform(50, 500, n_products).round(2),
+    '提前期_天': np.random.randint(7, 30, n_products),
+    '品类': np.random.choice(['A类', 'B类', 'C类'], n_products)
+})
+
+# 生成月度销量（不同产品的波动模式不同）
+sales_data = []
+for product_id in range(1, n_products + 1):
+    base_sales = np.random.randint(100, 500)
+    
+    # 模拟不同波动类型
+    if product_id <= 15:
+        # 高波动型：标准差大
+        volatility = 0.5
+    elif product_id <= 35:
+        # 低波动型：标准差小
+        volatility = 0.15
+    else:
+        # 季节性波动：某些月份高，某些月份低
+        volatility = 0.3
+    
+    for month in range(1, n_months + 1):
+        # 季节性因子
+        if product_id > 35:
+            seasonal_factor = 1 + 0.5 * np.sin((month - 3) * np.pi / 6)
+        else:
+            seasonal_factor = 1
+        
+        sales = base_sales * seasonal_factor * np.random.uniform(1-volatility, 1+volatility)
+        sales_data.append({
+            '产品ID': product_id,
+            '月份': month,
+            '销量': max(int(sales), 10)
+        })
+
+sales_df = pd.DataFrame(sales_data)
+
+print("="*60)
+print("月度销量数据")
+print("="*60)
+print(f"产品数：{n_products}")
+print(f"月度记录数：{len(sales_df)}")
+print("\\n销量数据（前20行）：")
+print(sales_df.head(20))
+print()
+
+# 2. 计算每个产品的销量统计
+print("="*60)
+print("计算产品销量统计")
+print("="*60)
+
+product_stats = sales_df.groupby('产品ID').agg({
+    '销量': ['mean', 'std', 'min', 'max']
+}).reset_index()
+
+product_stats.columns = ['产品ID', '平均销量', '销量标准差', '最小销量', '最大销量']
+product_stats['波动系数'] = product_stats['销量标准差'] / product_stats['平均销量']
+
+print("产品销量统计（前20行）：")
+print(product_stats.head(20).round(2))
+print()
+
+# 3. 对产品进行聚类
+print("="*60)
+print("产品销量波动聚类")
+print("="*60)
+
+features = ['平均销量', '销量标准差', '波动系数']
+X = product_stats[features]
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# 选择K=3
+best_k = 3
+kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+product_stats['簇标签'] = kmeans.fit_predict(X_scaled)
+
+print(f"聚类数量K={best_k}")
+print("各簇产品数：")
+print(product_stats['簇标签'].value_counts().sort_index())
+print()
+
+# 4. 分析各簇特征
+print("="*60)
+print("各簇特征分析")
+print("="*60)
+
+cluster_analysis = product_stats.groupby('簇标签').agg({
+    '产品ID': 'count',
+    '平均销量': 'mean',
+    '销量标准差': 'mean',
+    '波动系数': 'mean'
+}).round(2)
+
+cluster_analysis.columns = ['产品数', '平均销量', '平均标准差', '平均波动系数']
+
+# 为各簇命名
+def name_cluster(row):
+    cv = row['平均波动系数']
+    if cv > 0.35:
+        return '高波动产品'
+    elif cv > 0.2:
+        return '中波动产品'
+    else:
+        return '低波动产品'
+
+cluster_analysis['产品类型'] = cluster_analysis.apply(name_cluster, axis=1)
+
+print(cluster_analysis)
+print()
+
+# 5. 计算安全库存
+print("="*60)
+print("计算安全库存")
+print("="*60)
+
+# 合并产品信息
+result_df = product_stats.merge(products[['产品ID', '单价', '提前期_天']], on='产品ID')
+
+# 安全库存公式：SS = Z × σ × √L
+# Z = 安全系数（服务水平95%对应1.65，99%对应2.33）
+# σ = 销量标准差
+# L = 提前期
+
+Z_95 = 1.65  # 95%服务水平
+
+def calculate_safety_stock(row, volatility_type):
+    """根据波动类型计算安全库存"""
+    std = row['销量标准差']
+    lead_time = row['提前期_天']
+    
+    if volatility_type == '高波动产品':
+        # 高波动产品使用更高的安全系数
+        z = 2.33
+    elif volatility_type == '低波动产品':
+        # 低波动产品可以使用较低的安全系数
+        z = 1.28
+    else:
+        z = 1.65
+    
+    ss = z * std * np.sqrt(lead_time / 30)  # 将天转换为月
+    return int(ss)
+
+# 为每个产品计算安全库存
+result_df['产品类型'] = result_df['簇标签'].map(
+    dict(zip(cluster_analysis.index, cluster_analysis['产品类型']))
+)
+
+result_df['安全库存'] = result_df.apply(
+    lambda row: calculate_safety_stock(row, row['产品类型']), axis=1
+)
+
+# 传统固定库存策略（统一使用中等安全系数）
+result_df['传统安全库存'] = (Z_95 * result_df['销量标准差'] * np.sqrt(result_df['提前期_天'] / 30)).astype(int)
+
+# 计算库存成本
+result_df['差异化库存成本'] = result_df['安全库存'] * result_df['单价']
+result_df['传统库存成本'] = result_df['传统安全库存'] * result_df['单价']
+
+print("安全库存计算结果（前20行）：")
+print(result_df[['产品ID', '产品类型', '平均销量', '安全库存', '传统安全库存', '单价', '差异化库存成本']].head(20).round(2))
+print()
+
+# 6. 对比两种策略
+print("="*60)
+print("库存策略对比分析")
+print("="*60)
+
+print("各产品类型库存成本对比：")
+cost_comparison = result_df.groupby('产品类型').agg({
+    '差异化库存成本': 'sum',
+    '传统库存成本': 'sum',
+    '产品ID': 'count'
+}).round(2)
+
+cost_comparison.columns = ['差异化策略成本', '传统策略成本', '产品数']
+cost_comparison['成本节省'] = cost_comparison['传统策略成本'] - cost_comparison['差异化策略成本']
+cost_comparison['节省比例'] = (cost_comparison['成本节省'] / cost_comparison['传统策略成本'] * 100).round(2)
+
+print(cost_comparison)
+print()
+
+total_savings = cost_comparison['成本节省'].sum()
+total_savings_pct = (total_savings / cost_comparison['传统策略成本'].sum() * 100)
+
+print(f"\\n总体库存成本对比：")
+print(f"  传统策略总成本：¥{cost_comparison['传统策略成本'].sum():,.2f}")
+print(f"  差异化策略总成本：¥{cost_comparison['差异化策略成本'].sum():,.2f}")
+print(f"  总成本节省：¥{total_savings:,.2f} ({total_savings_pct:.2f}%)")
+print()
+
+# 7. 验证
+print("="*60)
+print("验证与建议")
+print("="*60)
+
+assert '安全库存' in result_df.columns, "安全库存计算缺失"
+assert '产品类型' in result_df.columns, "产品分类缺失"
+
+print("安全库存建议表（前10个产品）：")
+print(result_df[['产品ID', '产品名称', '产品类型', '平均销量', '安全库存', '提前期_天']].head(10))
+
+print("\\n业务建议：")
+print("1. 对高波动产品保持较高安全库存，避免缺货")
+print("2. 对低波动产品可以降低安全系数，节省库存成本")
+print("3. 定期根据最新销量数据重新计算安全库存")
+print("4. 结合销售预测，在旺季前适当增加备货")
+print()
+
+print("✓ 预测性补货与安全库存计算完成！")
+`,
+    tips: ['安全库存 = Z × σ × √L', '高波动产品需要更高的安全系数', '差异化策略可以节省库存成本而不牺牲服务水平']
   }
 ];
 
