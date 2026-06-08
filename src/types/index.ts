@@ -32,6 +32,7 @@ export interface Chapter {
   studyDurationMinutes?: number;
   keyPoints?: string[];
   exercises?: Exercise[];
+  hasCodePractice?: boolean;
 }
 
 export interface Note {

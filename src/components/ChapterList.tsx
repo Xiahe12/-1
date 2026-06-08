@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ChevronDown, ChevronRight, CheckCircle2, Circle, BookOpen, PartyPopper, Clock, Brain, Code, Lightbulb, FileQuestion } from 'lucide-react'
 import { Chapter, Exercise } from '../types'
 import { useAppStore } from '../store'
@@ -289,6 +290,18 @@ export default function ChapterList({ chapters }: ChapterListProps) {
                       )
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* 代码练习按钮 */}
+              {chapter.hasCodePractice && (
+                <div className="mt-4">
+                  <Link to={`/practice/${chapter.id}`}>
+                    <button className="w-full px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl font-medium hover:from-emerald-700 hover:to-emerald-800 transition-all flex items-center justify-center gap-2 shadow-lg">
+                      <Code className="h-5 w-5" />
+                      开始代码练习
+                    </button>
+                  </Link>
                 </div>
               )}
             </div>

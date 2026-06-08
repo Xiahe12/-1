@@ -2,15 +2,13 @@ import { create } from 'zustand';
 import { Course, Chapter, Note, StudyRecord, TodayGoal, AppState, StudyTask } from '../types';
 import { loadState, saveState } from '../utils/storage';
 
-
-
 const mockCourses: Course[] = [
   {
     id: 'course-1',
     title: 'Python基础',
     description: 'Python编程语言的基础语法、数据类型、控制结构和函数等核心概念',
     category: '编程语言',
-    progress: 80,
+    progress: 16,
     createdAt: new Date('2024-09-01').toISOString(),
     updatedAt: new Date('2024-10-15').toISOString(),
     introduction: 'Python是一门易于学习、功能强大的编程语言，被广泛应用于数据分析、人工智能、Web开发、自动化等领域。本课程从零基础开始，系统讲解Python的基础语法和核心概念，培养您的编程思维和实践能力。',
@@ -143,7 +141,6 @@ const mockChapters: Chapter[] = [
     title: 'Python基础语法',
     content: '变量、数据类型、运算符、控制结构等基础语法。',
     isCompleted: true,
-    completedAt: new Date('2024-09-15').toISOString(),
     studyDurationMinutes: 90,
     keyPoints: ['变量命名规则', '六种基本数据类型', '算术和比较运算符', 'if-elif-else条件语句', 'for和while循环'],
     exercises: [
@@ -156,6 +153,106 @@ const mockChapters: Chapter[] = [
         explanation: 'Python变量名不能以数字开头，不能使用连字符，不能使用保留关键字。my_name是合法的变量名。'
       }
     ]
+  },
+  {
+    id: 'chapter-3',
+    courseId: 'course-1',
+    title: '项目1：电商订单数据清洗与标准化',
+    content: '处理乱码日期、负价格、空值等脏数据，为AI模型提供干净数据。学习pandas基础数据清洗方法。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['Pandas数据清洗', '异常值处理', '日期格式统一', '缺失值填充'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-4',
+    courseId: 'course-1',
+    title: '项目2：用户行为日志解析与Session构建',
+    content: '从埋点日志构建用户会话序列，为AI推荐系统提供结构化输入。学习时间序列数据处理。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['Session分析', '时间序列处理', '用户路径分析', '会话切分'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-5',
+    courseId: 'course-1',
+    title: '项目3：销售数据的多维度探索性分析（EDA）',
+    content: '直观理解销售规律，为预测建模打基础。学习pandas透视表和统计分析。',
+    isCompleted: false,
+    studyDurationMinutes: 120,
+    keyPoints: ['透视表操作', '统计摘要', '周末效应分析', '销售波动'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-6',
+    courseId: 'course-1',
+    title: '项目4：购物车分析——商品关联规则挖掘',
+    content: '经典的"啤酒与尿布"分析，挖掘捆绑推荐规则。学习商品共现分析。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['关联规则', '支持度置信度', '提升度计算', '推荐策略'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-7',
+    courseId: 'course-1',
+    title: '项目5：基于RFM模型的用户价值分层',
+    content: '精细化运营的核心，为AI营销策略提供特征输入。学习用户分层方法。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['RFM模型', '用户价值分层', '分位数划分', '运营策略'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-8',
+    courseId: 'course-1',
+    title: '项目6：用户画像构建——K-Means聚类分析',
+    content: '利用AI算法自动划分用户群体，实现自动化分群。学习无监督学习应用。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['K-Means聚类', '特征工程', '用户画像', '群体分析'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-9',
+    courseId: 'course-1',
+    title: '项目7：时间序列分解与移动平均预测',
+    content: '理解销售数据的趋势与季节性，为AI预测模型提供基线。学习时间序列分析。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['时间序列', '移动平均', '季节性分解', '异常检测'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-10',
+    courseId: 'course-1',
+    title: '项目8：评论文本情感分析与销量关联',
+    content: '利用NLP将非结构化评论转化为可分析数据，验证口碑效应。学习文本分析。',
+    isCompleted: false,
+    studyDurationMinutes: 150,
+    keyPoints: ['情感分析', 'NLP基础', '关键词提取', '相关性分析'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-11',
+    courseId: 'course-1',
+    title: '项目9：协同过滤推荐系统实现',
+    content: '理解AI推荐算法的底层矩阵运算逻辑。学习推荐系统原理。',
+    isCompleted: false,
+    studyDurationMinutes: 180,
+    keyPoints: ['协同过滤', '余弦相似度', '矩阵运算', '推荐算法'],
+    hasCodePractice: true
+  },
+  {
+    id: 'chapter-12',
+    courseId: 'course-1',
+    title: '项目10：综合实战——电商全链路数据分析',
+    content: '模拟真实工作场景，融合前面所有技术完成完整分析报告。',
+    isCompleted: false,
+    studyDurationMinutes: 240,
+    keyPoints: ['全链路分析', '流量漏斗', '用户聚类', '策略建议'],
+    hasCodePractice: true
   }
 ];
 

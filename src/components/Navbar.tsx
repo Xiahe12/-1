@@ -1,4 +1,4 @@
-import { Menu, BookOpen, Home, User, X, CheckSquare, TrendingUp } from 'lucide-react';
+import { Menu, BookOpen, Home, Dog, X, CheckSquare, TrendingUp } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 
@@ -93,8 +93,8 @@ export default function Navbar({ onToggleSidebar }: NavbarProps) {
             </button>
             
             {/* 用户按钮 */}
-            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-slate-700 to-slate-600 rounded-full flex items-center justify-center border border-slate-500">
-              <User className="h-4 w-4 sm:h-5 sm:w-5 text-slate-200" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center border border-amber-500">
+              <Dog className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
             </div>
           </div>
         </div>
