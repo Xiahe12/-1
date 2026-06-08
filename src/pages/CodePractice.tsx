@@ -6759,436 +6759,432 @@ plt.show()`
 `,
     tips: ['滞后特征只使用历史值，不包含未来信息', '滚动统计可以捕捉趋势变化', '随机森林可以评估特征重要性']
   },
+  {
     id: 'bi-project-7',
     chapterId: 'chapter-59',
     title: '商品价格敏感度聚类分析（价格带偏好）',
-    description: '二维聚类（价格 vs 销量占比）、数据分箱与聚合。商品交易明细计算每个商品的平均单价与总销量，标准化后KMeans聚类，划分低价高量、高价低量、中价中庸等类型。',
-    difficulty: '基础',
-    skills: ['价格分析', '聚类分析', '价格敏感度'],
-    initialCode: `import pandas as pd
+    description: '二维聚类（价格vs销量占比）、数据分箱与聚合。商品交易明细，计算每个商品的平均单价与总销量，标准化后KMeans聚类。',
+    difficulty: '进阶',
+    skills: ['二维聚类', '价格敏感度', 'KMeans'],
+    initialCode: `# ========== 项目7：商品价格敏感度聚类分析 ==========
+import pandas as pd
 import numpy as np
-from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+from scipy import stats
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-# 1. 生成模拟商品交易数据
+# 1. 生成商品销售数据
 np.random.seed(42)
-n_products = 100
-n_transactions = 5000
+n_products = 200
 
-product_data = []
-for trans_id in range(n_transactions):
-    product_id = np.random.randint(1, n_products + 1)
-    unit_price = np.random.uniform(10, 500)
-    quantity = np.random.randint(1, 10)
+categories = ['电子产品', '服装', '食品', '家居', '美妆']
+price_ranges = {
+    '电子产品': (500, 5000),
+    '服装': (50, 800),
+    '食品': (10, 200),
+    '家居': (30, 1000),
+    '美妆': (20, 500)
+}
+
+data = []
+for i in range(n_products):
+    category = np.random.choice(categories)
+    min_price, max_price = price_ranges[category]
+    price = np.random.uniform(min_price, max_price)
     
-    product_data.append({
-        '商品ID': product_id,
-        '单价': unit_price,
-        '数量': quantity,
-        '销售额': unit_price * quantity
+    if price > price_ranges[category][1] * 0.7:
+        volume = np.random.poisson(50)
+    elif price < price_ranges[category][0] * 1.3:
+        volume = np.random.poisson(500)
+    else:
+        volume = np.random.poisson(200)
+    
+    revenue = price * volume
+    
+    data.append({
+        'Product_ID': f'P_{i:03d}',
+        'Category': category,
+        'Price': price,
+        'Sales_Volume': volume,
+        'Revenue': revenue
     })
 
-trans_df = pd.DataFrame(product_data)
+df = pd.DataFrame(data)
 
-print("="*60)
-print("商品交易数据概览")
-print("="*60)
-print(f"总交易数：{len(trans_df)}")
-print("\\n交易数据前15行：")
-print(trans_df.head(15))
-print()
+df['Price_per_Unit'] = df['Price']
+df['Price_Tier'] = pd.cut(df['Price'], bins=3, labels=['低', '中', '高'])
+df['Volume_Tier'] = pd.cut(df['Sales_Volume'], bins=3, labels=['低', '中', '高'])
 
-# 2. 按商品聚合统计
-print("="*60)
-print("按商品聚合统计")
-print("="*60)
+print("数据预览：")
+print(df.head())
+print(f"\n数据统计：\n{df[['Price', 'Sales_Volume', 'Revenue']].describe()}")
 
-product_stats = trans_df.groupby('商品ID').agg({
-    '单价': 'mean',  # 平均单价
-    '数量': 'sum',  # 总销量
-    '销售额': 'sum'  # 总销售额
-}).reset_index()
+# 2. 数据清洗
+Q1_price = df['Price'].quantile(0.25)
+Q3_price = df['Price'].quantile(0.75)
+IQR_price = Q3_price - Q1_price
+df = df[(df['Price'] >= Q1_price - 1.5*IQR_price) & (df['Price'] <= Q3_price + 1.5*IQR_price)]
 
-product_stats.columns = ['商品ID', '平均单价', '总销量', '总销售额']
+Q1_vol = df['Sales_Volume'].quantile(0.25)
+Q3_vol = df['Sales_Volume'].quantile(0.75)
+IQR_vol = Q3_vol - Q1_vol
+df = df[(df['Sales_Volume'] >= Q1_vol - 1.5*IQR_vol) & (df['Sales_Volume'] <= Q3_vol + 1.5*IQR_vol)]
 
-print("商品统计（前20行）：")
-print(product_stats.head(20).round(2))
-print()
+print(f"\n清洗后数据：{len(df)}个商品")
 
-# 3. 价格带分析
-print("="*60)
-print("价格带分布")
-print("="*60)
+# 3. 准备聚类特征
+features = ['Price', 'Sales_Volume']
+df['Price_Log'] = np.log1p(df['Price'])
+df['Volume_Log'] = np.log1p(df['Sales_Volume'])
+df['Revenue_per_Unit'] = df['Revenue'] / df['Sales_Volume']
 
-# 将商品按价格分箱
-price_bins = [0, 50, 100, 200, 500, 1000]
-price_labels = ['0-50元', '50-100元', '100-200元', '200-500元', '500元以上']
-product_stats['价格带'] = pd.cut(product_stats['平均单价'], bins=price_bins, labels=price_labels)
+features_advanced = ['Price_Log', 'Volume_Log']
+X = df[features_advanced]
 
-price_dist = product_stats.groupby('价格带').agg({
-    '商品ID': 'count',
-    '总销量': 'sum',
-    '总销售额': 'sum'
-}).round(2)
-price_dist.columns = ['商品数', '总销量', '总销售额']
-
-print("各价格带分布：")
-print(price_dist)
-print()
-
-# 4. KMeans聚类
-print("="*60)
-print("商品价格敏感度聚类")
-print("="*60)
-
-# 选择特征：平均单价和总销量
-features = ['平均单价', '总销量']
-X = product_stats[features]
-
-# 标准化
+# 4. 标准化
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
-# 聚类
-n_clusters = 4
-kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-product_stats['簇标签'] = kmeans.fit_predict(X_scaled)
+# 5. 确定最优K值
+inertias = []
+silhouettes = []
+K_range = range(2, 8)
 
-print(f"聚类数量：{n_clusters}")
-print("聚类结果分布：")
-print(product_stats['簇标签'].value_counts().sort_index())
-print()
+for k in K_range:
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    labels = kmeans.fit_predict(X_scaled)
+    inertias.append(kmeans.inertia_)
+    silhouettes.append(silhouette_score(X_scaled, labels))
 
-# 5. 聚类特征分析
-print("="*60)
-print("各簇商品特征分析")
-print("="*60)
+best_k = K_range[np.argmax(silhouettes)]
+print(f"\n最优K值：{best_k}（轮廓系数={max(silhouettes):.3f}）")
 
-cluster_stats = product_stats.groupby('簇标签').agg({
-    '商品ID': 'count',
-    '平均单价': 'mean',
-    '总销量': 'mean',
-    '总销售额': 'mean'
+# 6. 执行聚类
+kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+df['Cluster'] = kmeans.fit_predict(X_scaled)
+
+# 7. 聚类分析
+cluster_summary = df.groupby('Cluster').agg({
+    'Price': ['mean', 'median', 'std'],
+    'Sales_Volume': ['mean', 'median', 'std'],
+    'Revenue': 'sum'
 }).round(2)
 
-cluster_stats.columns = ['商品数', '平均单价', '平均销量', '平均销售额']
+print("\n=== 各聚类统计特征 ===")
+print(cluster_summary)
 
-print(cluster_stats)
-print()
-
-# 为各簇命名
-def name_cluster(row):
-    avg_price = row['平均单价']
-    avg_quantity = row['平均销量']
+# 8. 为每个聚类添加业务标签
+def label_price_cluster(cluster_id, df):
+    cluster_data = df[df['Cluster'] == cluster_id]
+    avg_price = cluster_data['Price'].mean()
+    avg_volume = cluster_data['Sales_Volume'].mean()
     
-    # 根据平均价格和销量判断
-    if avg_price < 100 and avg_quantity > 200:
-        return '低价爆款'
-    elif avg_price > 300 and avg_quantity < 100:
-        return '高端小众'
-    elif avg_price > 150 and avg_quantity > 150:
-        return '中价畅销'
+    if avg_price > df['Price'].quantile(0.7) and avg_volume > df['Sales_Volume'].median():
+        return '高价值热销品'
+    elif avg_price > df['Price'].quantile(0.7):
+        return '高端冷门品'
+    elif avg_price < df['Price'].quantile(0.3) and avg_volume > df['Sales_Volume'].quantile(0.7):
+        return '薄利多销品'
+    elif avg_volume < df['Sales_Volume'].quantile(0.3):
+        return '滞销品'
     else:
-        return '一般商品'
+        return '普通商品'
 
-cluster_stats['商品类型'] = cluster_stats.apply(name_cluster, axis=1)
+cluster_labels = {}
+for i in range(best_k):
+    cluster_labels[i] = label_price_cluster(i, df)
 
-print(cluster_stats)
-print()
+df['Cluster_Label'] = df['Cluster'].map(cluster_labels)
 
-# 6. 可视化数据准备
-print("="*60)
-print("聚类散点图数据")
-print("="*60)
+print("\n=== 各聚类商品数量 ===")
+label_counts = df['Cluster_Label'].value_counts()
+for label, count in label_counts.items():
+    print(f"{label}: {count}个商品 ({count/len(df)*100:.1f}%)")
 
-product_stats['商品类型'] = product_stats['簇标签'].map(
-    dict(zip(cluster_stats.index, cluster_stats['商品类型']))
-)
+# 9. 验证：价格与销量的相关性分析
+correlation = df['Price'].corr(df['Sales_Volume'])
+print(f"\n整体价格-销量相关性：{correlation:.3f}")
 
-for cluster_type in cluster_stats['商品类型']:
-    type_data = product_stats[product_stats['商品类型'] == cluster_type]
-    print(f"\\n【{cluster_type}】{len(type_data)}个商品")
-    print(f"  价格范围：¥{type_data['平均单价'].min():.0f} - ¥{type_data['平均单价'].max():.0f}")
-    print(f"  销量范围：{type_data['总销量'].min():.0f} - {type_data['总销量'].max():.0f}")
-    print(f"  代表商品ID：{type_data['商品ID'].head(5).tolist()}")
+print("\n各聚类内部价格-销量相关性：")
+for i in range(best_k):
+    cluster_corr = df[df['Cluster']==i]['Price'].corr(df[df['Cluster']==i]['Sales_Volume'])
+    print(f"  聚类{i}：{cluster_corr:.3f}")
 
-print()
+# 10. 方差分析验证价格差异
+print("\n=== 价格差异显著性检验 ===")
+price_groups = [df[df['Cluster']==i]['Price'].values for i in range(best_k)]
+f_stat, p_value = stats.f_oneway(*price_groups)
+print(f"ANOVA F统计量：{f_stat:.2f}, p-value：{p_value:.2e}")
+print(f"结论：{'各聚类价格存在显著差异' if p_value < 0.05 else '各聚类价格无显著差异'}")
 
-# 7. 价格敏感度分析
-print("="*60)
-print("价格敏感度分析")
-print("="*60)
+# 11. 可视化
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-# 计算每个簇的价格敏感度指标
-# 价格敏感度 = 低价格商品销量占比
-for cluster_type in cluster_stats['商品类型']:
-    type_data = product_stats[product_stats['商品类型'] == cluster_type]
-    low_price_ratio = (type_data['平均单价'] < 100).mean()
-    high_price_ratio = (type_data['平均单价'] > 300).mean()
+colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57']
+for i in range(best_k):
+    cluster_data = df[df['Cluster'] == i]
+    axes[0,0].scatter(cluster_data['Price'], cluster_data['Sales_Volume'], 
+                      label=f'聚类{i}: {cluster_labels[i]}', alpha=0.6, s=50, c=colors[i % len(colors)])
+axes[0,0].set_xlabel('价格')
+axes[0,0].set_ylabel('销量')
+axes[0,0].set_title('商品价格-销量聚类图')
+axes[0,0].legend()
+
+axes[0,1].plot(K_range, inertias, 'bo-')
+axes[0,1].set_xlabel('K值')
+axes[0,1].set_ylabel('惯性')
+axes[0,1].set_title('肘部法则图')
+axes[0,1].axvline(best_k, color='r', linestyle='--', label=f'最佳K={best_k}')
+axes[0,1].legend()
+
+sns.boxplot(data=df, x='Cluster_Label', y='Price', ax=axes[1,0])
+axes[1,0].set_title('各聚类价格分布')
+axes[1,0].tick_params(axis='x', rotation=45)
+
+sns.boxplot(data=df, x='Cluster_Label', y='Sales_Volume', ax=axes[1,1])
+axes[1,1].set_title('各聚类销量分布')
+axes[1,1].tick_params(axis='x', rotation=45)
+
+plt.tight_layout()
+plt.show()
+
+# 12. 业务建议
+print("\n=== 定价策略建议 ===")
+for label in label_counts.index:
+    cluster_data = df[df['Cluster_Label'] == label]
+    print(f"\n{label}（{len(cluster_data)}个商品）：")
+    print(f"  平均价格：¥{cluster_data['Price'].mean():.0f}")
+    print(f"  平均销量：{cluster_data['Sales_Volume'].mean():.0f}件")
     
-    print(f"【{cluster_type}】")
-    print(f"  低价商品占比：{low_price_ratio:.1%}")
-    print(f"  高价商品占比：{high_price_ratio:.1%}")
-    print()
-
-# 8. 业务建议
-print("="*60)
-print("业务建议")
-print("="*60)
-
-for _, row in cluster_stats.iterrows():
-    cluster_type = row['商品类型']
-    count = row['商品数']
-    
-    print(f"\\n【{cluster_type}】（{int(count)}个商品）")
-    if '爆款' in cluster_type:
-        print("  策略：薄利多销，保证库存充足，关注成本控制")
-    elif '小众' in cluster_type:
-        print("  策略：提升服务体验，强调品质，精准营销")
-    elif '畅销' in cluster_type:
-        print("  策略：优化产品组合，维持价格竞争力")
-    else:
-        print("  策略：分析提升空间，考虑差异化或优化")
-
-# 9. 方差分析验证
-print()
-print("="*60)
-print("方差分析验证")
-print("="*60)
-
-# 验证：各簇平均价格差异是否显著
-cluster_prices = [product_stats[product_stats['簇标签'] == i]['平均单价'].values 
-                  for i in range(n_clusters)]
-price_variance = np.var([np.mean(p) for p in cluster_prices])
-
-print(f"各簇平均价格方差：{price_variance:.2f}")
-print(f"验证：方差显著（>{10}）→ {'是' if price_variance > 10 else '否'}")
-
-# 10. 验证
-print()
-print("="*60)
-print("验证结果")
-print("="*60)
-assert '簇标签' in product_stats.columns, "聚类结果缺失"
-print(f"✓ 价格聚类完成，共{len(product_stats)}个商品分成{n_clusters}个类型")
-print("✓ 聚类分析完成！")
+    if label == '高价值热销品':
+        print(f"  建议：维持价格，考虑捆绑销售")
+    elif label == '薄利多销品':
+        print(f"  建议：可小幅提价测试弹性，或增加SKU")
+    elif label == '高端冷门品':
+        print(f"  建议：精准营销，提升品牌溢价")
+    elif label == '滞销品':
+        print(f"  建议：降价清仓或下架")`
 `,
-    tips: ['二维聚类可以直观展示商品的价格-销量分布', '不同聚类的商品需要不同的营销策略', '价格敏感度分析有助于定价决策']
+    tips: ['价格和销量是分析商品策略的核心指标', '聚类可以发现价格带偏好相似的商品群', '方差分析可以验证聚类效果的显著性']
   },
   {
     id: 'bi-project-8',
     chapterId: 'chapter-60',
-    title: '动态购物车智能推荐模拟（协同过滤 + 关联规则对比）',
-    description: '用户-商品矩阵、基于项目的协同过滤（余弦相似度）、关联规则对比。使用用户购买历史，若用户加入商品A，基于相似商品推荐Top3，同时与关联规则推荐结果对比。',
+    title: '动态购物车智能推荐模拟（协同过滤+关联规则对比）',
+    description: '用户-商品矩阵、基于项目的协同过滤（余弦相似度）、关联规则对比。使用用户购买历史，若用户加入商品A，基于相似商品推荐Top3。',
     difficulty: '进阶',
-    skills: ['协同过滤', '余弦相似度', '智能推荐'],
-    initialCode: `import pandas as pd
+    skills: ['协同过滤', '余弦相似度', '关联规则', '推荐系统'],
+    initialCode: `# ========== 项目8：动态购物车智能推荐模拟 ==========
+import pandas as pd
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+from mlxtend.frequent_patterns import apriori, association_rules
+import matplotlib.pyplot as plt
 
-# 1. 生成模拟用户-商品交互数据
+# 1. 生成用户-商品购买历史数据
 np.random.seed(42)
-n_users = 50
-n_products = 30
-n_interactions = 500
+users = [f'U_{i:04d}' for i in range(200)]
+products = ['牛奶', '面包', '黄油', '鸡蛋', '啤酒', '尿布', '可乐', '薯片', '巧克力', '水果',
+            '咖啡', '茶叶', '果汁', '饼干', '酸奶']
 
-products = {i: f'商品{i}' for i in range(1, n_products + 1)}
+n_users = len(users)
+purchases = []
 
-interaction_data = []
-for _ in range(n_interactions):
-    user_id = np.random.randint(1, n_users + 1)
-    product_id = np.random.randint(1, n_products + 1)
+for user in users:
+    n_items = np.random.randint(3, 9)
+    user_products = []
     
-    interaction_data.append({
-        '用户ID': user_id,
-        '商品ID': product_id,
-        '是否购买': 1
-    })
+    if np.random.random() > 0.6:
+        user_products.extend(['啤酒', '尿布'])
+    if np.random.random() > 0.5:
+        user_products.extend(['牛奶', '面包'])
+    if np.random.random() > 0.7:
+        user_products.extend(['咖啡', '饼干'])
+    
+    remaining = n_items - len(user_products)
+    if remaining > 0:
+        other_products = [p for p in products if p not in user_products]
+        user_products.extend(np.random.choice(other_products, remaining, replace=False).tolist())
+    
+    for product in set(user_products):
+        purchases.append({
+            'User_ID': user,
+            'Product': product,
+            'Rating': np.random.choice([1, 2, 3, 4, 5], p=[0.1, 0.1, 0.2, 0.3, 0.3])
+        })
 
-interactions_df = pd.DataFrame(interaction_data).drop_duplicates()
+df = pd.DataFrame(purchases)
 
-print("="*60)
-print("用户-商品交互数据")
-print("="*60)
-print(f"总交互数：{len(interactions_df)}")
-print("\\n交互数据前20行：")
-print(interactions_df.head(20))
-print()
+print("数据规模：")
+print(f"用户数：{df['User_ID'].nunique()}")
+print(f"商品数：{df['Product'].nunique()}")
+print(f"购买记录数：{len(df)}")
 
 # 2. 构建用户-商品矩阵
-print("="*60)
-print("构建用户-商品矩阵")
-print("="*60)
+user_item_matrix = df.pivot_table(index='User_ID', columns='Product', values='Rating', fill_value=0)
 
-user_product_matrix = interactions_df.pivot_table(
-    index='用户ID',
-    columns='商品ID',
-    values='是否购买',
-    fill_value=0
-)
-
-print(f"用户-商品矩阵形状：{user_product_matrix.shape}")
-print("\\n用户-商品矩阵（前10用户，前10商品）：")
-print(user_product_matrix.iloc[:10, :10])
-print()
+print(f"\n用户-商品矩阵形状：{user_item_matrix.shape}")
 
 # 3. 基于项目的协同过滤
-print("="*60)
-print("基于项目的协同过滤（Item-based CF）")
-print("="*60)
+def item_based_collaborative(user_id, top_n=5):
+    user_products = user_item_matrix.loc[user_id]
+    purchased = user_products[user_products > 0].index.tolist()
+    
+    if len(purchased) == 0:
+        return []
+    
+    item_similarity = cosine_similarity(user_item_matrix.T)
+    item_similarity_df = pd.DataFrame(item_similarity, 
+                                      index=user_item_matrix.columns,
+                                      columns=user_item_matrix.columns)
+    
+    recommendations = {}
+    for product in purchased:
+        similar_items = item_similarity_df[product].sort_values(ascending=False)
+        similar_items = similar_items[~similar_items.index.isin(purchased)]
+        for sim_item, score in similar_items.head(3).items():
+            if sim_item not in recommendations:
+                recommendations[sim_item] = 0
+            recommendations[sim_item] += score
+    
+    recommended = sorted(recommendations.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    return [item for item, score in recommended]
 
-# 计算商品相似度矩阵（余弦相似度）
-item_similarity = cosine_similarity(user_product_matrix.T)
-item_similarity_df = pd.DataFrame(
-    item_similarity,
-    index=user_product_matrix.columns,
-    columns=user_product_matrix.columns
-)
+# 4. 基于关联规则的推荐
+cart_matrix = pd.crosstab(df['User_ID'], df['Product']).astype(bool)
 
-print(f"商品相似度矩阵形状：{item_similarity_df.shape}")
-print("\\n商品相似度示例（商品1与其他商品的相似度）：")
-print(item_similarity_df[1].sort_values(ascending=False).head(10).round(4))
-print()
+frequent_itemsets = apriori(cart_matrix, min_support=0.03, use_colnames=True)
+rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=0.4)
+rules = rules[rules['lift'] > 1.2].sort_values('lift', ascending=False)
 
-# 4. 定义推荐函数
-def item_based_recommend(target_item, top_n=3):
-    """基于项目协同过滤推荐"""
-    # 获取与目标商品最相似的Top N商品
-    similar_items = item_similarity_df[target_item].sort_values(ascending=False)
-    # 排除自身
-    similar_items = similar_items.drop(target_item)
-    # 返回Top N推荐
-    return similar_items.head(top_n)
-
-# 5. 关联规则推荐
-print("="*60)
-print("关联规则推荐")
-print("="*60)
-
-# 计算商品共现
-co_occurrence = user_product_matrix.T.dot(user_product_matrix)
-np.fill_diagonal(co_occurrence.values, 0)
-
-# 计算支持度
-item_support = user_product_matrix.sum() / len(user_product_matrix)
-total_transactions = len(user_product_matrix)
-
-# 计算关联规则
-def association_rule_recommend(target_item, top_n=3):
-    """基于关联规则推荐"""
+def rule_based_recommend(user_id, top_n=5):
+    user_products = set(df[df['User_ID'] == user_id]['Product'].tolist())
     recommendations = {}
     
-    for other_item in range(1, n_products + 1):
-        if other_item != target_item:
-            # 计算支持度和置信度
-            co_count = co_occurrence.loc[target_item, other_item]
-            support_both = co_count / total_transactions
-            confidence = support_both / item_support[target_item] if item_support[target_item] > 0 else 0
-            
-            if confidence > 0:
-                recommendations[other_item] = {
-                    '共现次数': int(co_count),
-                    '置信度': confidence
-                }
+    for _, rule in rules.iterrows():
+        antecedents = set(rule['antecedents'])
+        if antecedents.issubset(user_products):
+            consequents = rule['consequents']
+            for item in consequents:
+                if item not in user_products:
+                    if item not in recommendations:
+                        recommendations[item] = 0
+                    recommendations[item] += rule['confidence']
     
-    # 按置信度排序
-    sorted_recs = sorted(recommendations.items(), 
-                        key=lambda x: x[1]['置信度'], 
-                        reverse=True)
-    return sorted_recs[:top_n]
+    recommended = sorted(recommendations.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    return [item for item, score in recommended]
 
-# 6. 推荐示例
-print("="*60)
-print("推荐示例")
-print("="*60)
+# 5. 混合推荐（结合两种方法）
+def hybrid_recommend(user_id, top_n=5):
+    cf_recs = item_based_collaborative(user_id, top_n*2)
+    rule_recs = rule_based_recommend(user_id, top_n*2)
+    
+    scores = {}
+    for item in cf_recs:
+        scores[item] = scores.get(item, 0) + 1
+    for item in rule_recs:
+        scores[item] = scores.get(item, 0) + 1
+    
+    recommended = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    return [item for item, score in recommended]
 
-# 选择一个测试商品
-test_item = 1
-print(f"测试商品：{products[test_item]}")
-print()
+# 6. 测试推荐效果
+test_users = np.random.choice(users, 5, replace=False)
 
-# 协同过滤推荐
-print("【基于项目协同过滤推荐】")
-cf_recs = item_based_recommend(test_item, top_n=3)
-print(f"基于与「{products[test_item]}」相似的商品：")
-for item_id, similarity in cf_recs.items():
-    print(f"  {products[item_id]}（相似度：{similarity:.4f})")
-print()
+print("\n=== 推荐结果示例 ===")
+for user in test_users:
+    purchased = df[df['User_ID'] == user]['Product'].tolist()
+    hybrid_recs = hybrid_recommend(user, top_n=5)
+    
+    print(f"\n用户 {user}:")
+    print(f"  已购商品：{purchased[:5]}...")
+    print(f"  推荐商品：{hybrid_recs}")
 
-# 关联规则推荐
-print("【基于关联规则推荐】")
-ar_recs = association_rule_recommend(test_item, top_n=3)
-print(f"购买「{products[test_item]}」后常购买：")
-for item_id, info in ar_recs:
-    print(f"  {products[item_id]}（置信度：{info['置信度']:.2%}，共现{info['共现次数']}次）")
-print()
+# 7. 验证：推荐的商品未被用户购买
+def validate_recommendations():
+    valid_count = 0
+    total_count = 0
+    
+    for user in users[:50]:
+        purchased = set(df[df['User_ID'] == user]['Product'].tolist())
+        recs = hybrid_recommend(user, top_n=5)
+        
+        for item in recs:
+            total_count += 1
+            if item not in purchased:
+                valid_count += 1
+    
+    valid_rate = valid_count / total_count if total_count > 0 else 0
+    print(f"\n验证结果：{valid_rate*100:.1f}%的推荐商品未被用户购买")
+    return valid_rate
 
-# 7. 对比分析
-print("="*60)
-print("两种推荐方法对比")
-print("="*60)
+validate_recommendations()
 
-cf_set = set(cf_recs.index)
-ar_set = set([item_id for item_id, _ in ar_recs])
+# 8. 评估推荐质量
+def precision_at_k(user, k=5):
+    user_purchases = df[df['User_ID'] == user]['Product'].tolist()
+    if len(user_purchases) < 2:
+        return 0
+    
+    last_purchase = user_purchases[-1]
+    previous_purchases = user_purchases[:-1]
+    
+    temp_df = df[~((df['User_ID'] == user) & (df['Product'] == last_purchase))]
+    recs = item_based_collaborative(user, k)
+    
+    return 1 if last_purchase in recs else 0
 
-overlap = cf_set & ar_set
-only_cf = cf_set - ar_set
-only_ar = ar_set - cf_set
+avg_precision = np.mean([precision_at_k(user) for user in users[:50]])
+print(f"\n模拟精确率@5：{avg_precision:.3f}")
 
-print(f"协同过滤推荐商品：{cf_set}")
-print(f"关联规则推荐商品：{ar_set}")
-print(f"重叠商品：{overlap if overlap else '无'}")
-print(f"仅协同过滤：{only_cf if only_cf else '无'}")
-print(f"仅关联规则：{only_ar if only_ar else '无'}")
-print()
+# 9. 对比两种推荐方法
+print("\n=== 推荐方法对比 ===")
+cf_recs_all = []
+rule_recs_all = []
 
-print("方法特点对比：")
-print("  协同过滤：基于用户行为相似性，适合用户数据丰富的场景")
-print("  关联规则：基于商品共现规律，解释性强，适合item数据丰富的场景")
-print()
+for user in users[:30]:
+    cf_recs = item_based_collaborative(user, 3)
+    rule_recs = rule_based_recommend(user, 3)
+    cf_recs_all.extend(cf_recs)
+    rule_recs_all.extend(rule_recs)
 
-# 8. 业务应用
-print("="*60)
-print("业务应用场景")
-print("="*60)
+from collections import Counter
+print(f"协同过滤推荐Top商品：{Counter(cf_recs_all).most_common(5)}")
+print(f"关联规则推荐Top商品：{Counter(rule_recs_all).most_common(5)}")
 
-print("场景1：用户加入购物车后")
-print("  → 展示相似商品推荐")
-print("  → 展示购买了此商品的用户还买了")
-print()
+# 10. 可视化
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-print("场景2：商品详情页")
-print("  → 展示关联商品组合")
-print("  → 展示热销搭配")
-print()
+sample_products = products[:8]
+sample_sim = cosine_similarity(user_item_matrix[sample_products].T)
+sns.heatmap(sample_sim, xticklabels=sample_products, yticklabels=sample_products, 
+            annot=True, fmt='.2f', cmap='coolwarm', ax=axes[0])
+axes[0].set_title('商品相似度矩阵', fontsize=12)
 
-print("场景3：购物车结算页")
-print("  → 基于已选商品进行跨类目推荐")
-print("  → 展示加购优惠组合")
-print()
+all_recs = []
+for user in users[:100]:
+    all_recs.extend(hybrid_recommend(user, 3))
+rec_counter = Counter(all_recs)
+top_recs = rec_counter.most_common(8)
+axes[1].bar([r[0] for r in top_recs], [r[1] for r in top_recs], color='steelblue')
+axes[1].set_title('推荐商品频率分布')
+axes[1].set_xlabel('商品')
+axes[1].set_ylabel('推荐次数')
+axes[1].tick_params(axis='x', rotation=45)
 
-# 9. 验证
-print("="*60)
-print("验证结果")
-print("="*60)
+plt.tight_layout()
+plt.show()
 
-# 验证：推荐商品未被用户已购买
-test_user = 1
-user_purchased = set(user_product_matrix.loc[test_user][user_product_matrix.loc[test_user] == 1].index)
-
-if len(cf_recs) > 0:
-    for item_id in cf_recs.index:
-        assert item_id not in user_purchased, f"推荐了用户已购买的商品{item_id}"
-
-print(f"✓ 推荐商品未被用户已购买")
-print(f"✓ 协同过滤推荐{len(cf_recs)}个商品")
-print(f"✓ 关联规则推荐{len(ar_recs)}个商品")
-print("✓ 智能推荐模拟完成！")
+print("\n=== 推荐系统总结 ===")
+print("1. 协同过滤基于用户行为相似度，发现潜在兴趣")
+print("2. 关联规则发现购物篮中的强关联关系")
+print("3. 混合推荐结合两者优势，提高推荐多样性")`
 `,
-    tips: ['协同过滤利用用户行为的相似性', '关联规则挖掘商品之间的共现关系', '两种方法可以互补使用，提升推荐效果']
+    tips: ['协同过滤通过用户行为相似度推荐', '关联规则发现商品间的强关联关系', '混合推荐可以提高推荐的多样性和准确性']
   },
-  {
     id: 'bi-project-9',
     chapterId: 'chapter-61',
     title: '异常交易检测（孤立森林 + 统计方法）',
